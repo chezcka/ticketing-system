@@ -1,0 +1,3 @@
+rootProject.name = 'ticketing-system'
+include 'ticketing-system-backend'
+project(':ticketing-system-backend').projectDir = file('ticketing-system-backend')
