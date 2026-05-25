@@ -92,7 +92,7 @@ jobs:
         ./gradlew bootJar
     
     - name: Upload backend artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: backend-jar
         path: ticketing-system-backend/build/libs/
@@ -120,7 +120,7 @@ jobs:
       run: npm run build
     
     - name: Upload frontend artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: frontend-build
         path: ticketing-system-frontend/dist/
