@@ -50,13 +50,13 @@ public class TicketController {
 
     /**
      * Get all tickets with pagination
-     * GET /api/tickets?page=0&size=10
+     * GET /api/tickets?page=0&size=1000
      */
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getAllTickets(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "1000") int size) {
         try {
             Pageable pageable = PageRequest.of(page, size);
             Page<TicketResponse> tickets = ticketService.getAllTickets(pageable);
@@ -119,14 +119,14 @@ public class TicketController {
 
     /**
      * Get my tickets (created by current user)
-     * GET /api/tickets/user/mine?page=0&size=10
+     * GET /api/tickets/user/mine?page=0&size=1000
      */
     @GetMapping("/user/mine")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getMyTickets(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "1000") int size) {
         try {
             String token = authHeader.replace("Bearer ", "");
             Long userId = jwtTokenProvider.getUserIdFromToken(token);
@@ -141,14 +141,14 @@ public class TicketController {
 
     /**
      * Get tickets assigned to current user (agent)
-     * GET /api/tickets/assigned/me?page=0&size=10
+     * GET /api/tickets/assigned/me?page=0&size=1000
      */
     @GetMapping("/assigned/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getAssignedTickets(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "1000") int size) {
         try {
             String token = authHeader.replace("Bearer ", "");
             Long userId = jwtTokenProvider.getUserIdFromToken(token);
