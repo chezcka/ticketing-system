@@ -160,12 +160,22 @@ public class CommentServiceTest {
     @Test
     public void testGetCommentsByTicketSuccess() {
         List<Comment> comments = Arrays.asList(testComment);
+
+        // 1. ADD THIS: Mock the ticket lookup that the service performs for validation
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+
+        // 2. Mock the comment retrieval
         when(commentRepository.findByTicketId(1L)).thenReturn(comments);
 
-        List<CommentResponse> responses = commentService.getCommentsByTicket(1L);
+        // 3. Act
+        List<CommentResponse> responses = commentService.getTicketComments(1L);
 
+        // 4. Assert
         assertNotNull(responses);
         assertEquals(1, responses.size());
+
+        // 5. Verify the validation was actually called
+        verify(ticketRepository).findById(1L);
     }
 
     @Test
@@ -173,7 +183,8 @@ public class CommentServiceTest {
         when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
         doNothing().when(commentRepository).delete(any(Comment.class));
 
-        commentService.deleteComment(1L);
+        // FIX: Passed both commentId (1L) and userId (1L) to match method signature
+        commentService.deleteComment(1L, 1L);
 
         verify(commentRepository, times(1)).delete(testComment);
     }
@@ -189,7 +200,8 @@ public class CommentServiceTest {
         when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
         when(commentRepository.save(any(Comment.class))).thenReturn(testComment);
 
-        CommentResponse response = commentService.updateComment(1L, updateRequest);
+        // FIX: Passed commentId (1L), userId (1L), and updateRequest
+        CommentResponse response = commentService.updateComment(1L, 1L, updateRequest);
 
         assertNotNull(response);
         assertEquals("Updated comment content", response.getContent());

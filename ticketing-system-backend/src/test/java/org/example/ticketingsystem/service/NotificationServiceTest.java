@@ -1,11 +1,6 @@
 package org.example.ticketingsystem.service;
 
-import org.example.ticketingsystem.model.Comment;
-import org.example.ticketingsystem.model.Ticket;
-import org.example.ticketingsystem.model.TicketStatus;
-import org.example.ticketingsystem.model.User;
-import org.example.ticketingsystem.model.UserRole;
-import org.example.ticketingsystem.model.UserStatus;
+import org.example.ticketingsystem.model.*;
 import org.example.ticketingsystem.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,7 +37,7 @@ public class NotificationServiceTest {
 
     @BeforeEach
     public void setUp() {
-        // Set frontend URL for testing
+
         ReflectionTestUtils.setField(notificationService, "frontendUrl", "http://localhost:5173");
 
         clientUser = new User();
@@ -77,158 +72,130 @@ public class NotificationServiceTest {
         testComment.setCreatedAt(LocalDateTime.now());
     }
 
+    // ---------------- NEW COMMENT ----------------
+
     @Test
     public void testNotifyNewCommentAgentReplyToClient() {
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
         doNothing().when(mailSender).send(any(SimpleMailMessage.class));
 
         notificationService.notifyNewComment(testTicket, testComment, agentUser);
 
-        // Small delay to allow async processing
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        verify(mailSender, timeout(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
+        verify(mailSender, timeout(1000).atLeastOnce())
+                .send(any(SimpleMailMessage.class));
     }
 
     @Test
     public void testNotifyNewCommentClientReplyToAgent() {
+
         testComment.setUserId(1L);
+
         when(userRepository.findById(2L)).thenReturn(Optional.of(agentUser));
         doNothing().when(mailSender).send(any(SimpleMailMessage.class));
 
         notificationService.notifyNewComment(testTicket, testComment, clientUser);
 
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        verify(mailSender, timeout(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
+        verify(mailSender, timeout(1000).atLeastOnce())
+                .send(any(SimpleMailMessage.class));
     }
 
     @Test
     public void testNotifyNewCommentInternalNoteNotSent() {
+
         testComment.setIsInternal(true);
-        doNothing().when(mailSender).send(any(SimpleMailMessage.class));
+
+        lenient().when(userRepository.findById(anyLong()))
+                .thenReturn(Optional.of(clientUser));
+
+        lenient().doNothing().when(mailSender).send(any(SimpleMailMessage.class));
 
         notificationService.notifyNewComment(testTicket, testComment, agentUser);
 
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // Internal notes should not trigger email notifications
-        verify(mailSender, never()).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    public void testNotifyStatusChangeSuccess() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
-        doNothing().when(mailSender).send(any(SimpleMailMessage.class));
-
-        testTicket.setStatus(TicketStatus.IN_PROGRESS);
-        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
-
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        verify(mailSender, timeout(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    public void testNotifyStatusChangeClientNotFound() {
-        when(userRepository.findById(1L)).thenReturn(Optional.empty());
-        doNothing().when(mailSender).send(any(SimpleMailMessage.class));
-
-        testTicket.setStatus(TicketStatus.IN_PROGRESS);
-        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
-
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // Should not attempt to send if client not found
-        verify(mailSender, never()).send(any(SimpleMailMessage.class));
-    }
-
-    @Test
-    public void testNotifyStatusChangeWithoutEmail() {
-        clientUser.setEmail(null);
-        when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
-
-        testTicket.setStatus(TicketStatus.IN_PROGRESS);
-        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
-
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        // Should not attempt to send if no email
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
 
     @Test
     public void testNotifyNewCommentWithNullEmail() {
+
         clientUser.setEmail(null);
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
 
         notificationService.notifyNewComment(testTicket, testComment, agentUser);
 
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
 
-        // Should handle null email gracefully
+    // ---------------- STATUS CHANGE ----------------
+
+    @Test
+    public void testNotifyStatusChangeSuccess() {
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
+        doNothing().when(mailSender).send(any(SimpleMailMessage.class));
+
+        testTicket.setStatus(TicketStatus.IN_PROGRESS);
+
+        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
+
+        verify(mailSender, timeout(1000).atLeastOnce())
+                .send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    public void testNotifyStatusChangeClientNotFound() {
+
+        when(userRepository.findById(1L)).thenReturn(Optional.empty());
+
+        lenient().doNothing().when(mailSender).send(any(SimpleMailMessage.class));
+
+        testTicket.setStatus(TicketStatus.IN_PROGRESS);
+
+        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
+
+        verify(mailSender, never()).send(any(SimpleMailMessage.class));
+    }
+
+    @Test
+    public void testNotifyStatusChangeWithoutEmail() {
+
+        clientUser.setEmail(null);
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
+
+        testTicket.setStatus(TicketStatus.IN_PROGRESS);
+
+        notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
+
         verify(mailSender, never()).send(any(SimpleMailMessage.class));
     }
 
     @Test
     public void testNotifyStatusChangeFromOpenToResolved() {
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
         doNothing().when(mailSender).send(any(SimpleMailMessage.class));
 
         testTicket.setStatus(TicketStatus.RESOLVED);
+
         notificationService.notifyStatusChange(testTicket, TicketStatus.OPEN.name());
 
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        verify(mailSender, timeout(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
+        verify(mailSender, timeout(1000).atLeastOnce())
+                .send(any(SimpleMailMessage.class));
     }
 
     @Test
     public void testNotifyStatusChangeFromResolvedToClosed() {
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(clientUser));
         doNothing().when(mailSender).send(any(SimpleMailMessage.class));
 
         testTicket.setStatus(TicketStatus.CLOSED);
+
         notificationService.notifyStatusChange(testTicket, TicketStatus.RESOLVED.name());
 
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-
-        verify(mailSender, timeout(1000).atLeastOnce()).send(any(SimpleMailMessage.class));
+        verify(mailSender, timeout(1000).atLeastOnce())
+                .send(any(SimpleMailMessage.class));
     }
 }

@@ -1,6 +1,5 @@
 package org.example.ticketingsystem.service;
 
-import org.example.ticketingsystem.dto.TicketStatsResponse;
 import org.example.ticketingsystem.model.Ticket;
 import org.example.ticketingsystem.model.TicketStatus;
 import org.example.ticketingsystem.repository.TicketRepository;
@@ -12,6 +11,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+
+// FIX: Explicit import of the inner static response object from TicketService
+import org.example.ticketingsystem.service.TicketService.TicketStatsResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,7 @@ public class ReportingServiceTest {
         when(ticketRepository.countByStatus(TicketStatus.RESOLVED)).thenReturn(8L);
         when(ticketRepository.countByStatus(TicketStatus.CLOSED)).thenReturn(12L);
 
+        // Fixed type invocation using the explicit import mapping
         TicketStatsResponse stats = ticketService.getTicketStats();
 
         assertNotNull(stats);
@@ -105,9 +108,9 @@ public class ReportingServiceTest {
         assertEquals(500L, stats.getInProgressCount());
         assertEquals(2000L, stats.getResolvedCount());
         assertEquals(3000L, stats.getClosedCount());
-        
-        long totalTickets = stats.getOpenCount() + stats.getInProgressCount() 
-                          + stats.getResolvedCount() + stats.getClosedCount();
+
+        long totalTickets = stats.getOpenCount() + stats.getInProgressCount()
+                + stats.getResolvedCount() + stats.getClosedCount();
         assertEquals(6500L, totalTickets);
     }
 }
