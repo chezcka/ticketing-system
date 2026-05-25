@@ -17,7 +17,9 @@ public class TicketResponse {
     private String category;
     private Long createdBy;
     private String createdByName;
-    private Long assignedTo;
+
+    private UserResponse assignedTo;
+
     private String assignedToName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

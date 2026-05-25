@@ -187,16 +187,19 @@ public class UserController {
     }
 
     /**
-     * Get all users
+     * Get all users (ADMIN ONLY)
      * GET /api/auth/users
      */
     @GetMapping("/users")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPPORT_AGENT')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
 
         try {
+            log.info("Fetching all users for admin");
 
             List<UserResponse> users = userService.getAllUsers();
+
+            log.info("Successfully retrieved {} users", users.size());
 
             return ResponseEntity.ok(
                     new ApiResponse<>(
@@ -208,7 +211,7 @@ public class UserController {
 
         } catch (Exception e) {
 
-            log.error("Error fetching users: {}", e.getMessage());
+            log.error("Error fetching users: {}", e.getMessage(), e);
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ApiResponse<>(
@@ -290,7 +293,7 @@ public class UserController {
      * DELETE /api/auth/users/{id}
      */
     @DeleteMapping("/users/{id}")
-    @PreAuthorize("isAuthenticated()")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteUser(
             @PathVariable Long id) {
 
@@ -351,6 +354,72 @@ public class UserController {
     }
 
     /**
+     * Deactivate user (soft delete via status change)
+     * PUT /api/auth/users/{id}/deactivate
+     */
+    @PutMapping("/users/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> deactivateUser(
+            @PathVariable Long id) {
+
+        try {
+
+            UserResponse deactivatedUser = userService.deactivateUser(id);
+
+            return ResponseEntity.ok(
+                    new ApiResponse<>(
+                            true,
+                            "User deactivated successfully",
+                            deactivatedUser
+                    )
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            log.error("Error deactivating user: {}", e.getMessage());
+
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(
+                            false,
+                            e.getMessage()
+                    ));
+        }
+    }
+
+    /**
+     * Reactivate user
+     * PUT /api/auth/users/{id}/reactivate
+     */
+    @PutMapping("/users/{id}/reactivate")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<UserResponse>> reactivateUser(
+            @PathVariable Long id) {
+
+        try {
+
+            UserResponse reactivatedUser = userService.reactivateUser(id);
+
+            return ResponseEntity.ok(
+                    new ApiResponse<>(
+                            true,
+                            "User reactivated successfully",
+                            reactivatedUser
+                    )
+            );
+
+        } catch (IllegalArgumentException e) {
+
+            log.error("Error reactivating user: {}", e.getMessage());
+
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(
+                            false,
+                            e.getMessage()
+                    ));
+        }
+    }
+
+    /**
      * Update user role
      * PUT /api/auth/users/{id}/role
      */
@@ -398,8 +467,14 @@ public class UserController {
 
             UserRegisterRequest registerRequest = new UserRegisterRequest();
             registerRequest.setEmail(request.getEmail());
-            registerRequest.setPassword(request.getPassword());
             registerRequest.setFullName(request.getFullName());
+            registerRequest.setDepartment(request.getDepartment());
+            // Use provided password or fall back to default
+            registerRequest.setPassword(
+                    (request.getPassword() != null && !request.getPassword().isEmpty())
+                            ? request.getPassword()
+                            : "Agent@123456"
+            );
 
             UserResponse createdUser =
                     userService.registerSupportAgent(registerRequest);
@@ -419,6 +494,16 @@ public class UserController {
                     .body(new ApiResponse<>(
                             false,
                             e.getMessage()
+                    ));
+
+        } catch (Exception e) {
+
+            log.error("Unexpected error creating support agent: {}", e.getMessage());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(
+                            false,
+                            "Failed to create support agent"
                     ));
         }
     }

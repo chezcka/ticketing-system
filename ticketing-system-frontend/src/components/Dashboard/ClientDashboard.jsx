@@ -3,10 +3,10 @@ import { useAuth } from '../../context/useAuth';
 import { getUserTickets, createTicket } from '../../services/ticketService';
 import { useTicketComments } from '../../hooks/useTicketComments';
 import TicketThread from '../Common/TicketThread';
+import Pagination from '../Common/Pagination';
 import './ClientDashboard.css';
 
-// ─── SVG Icons (unchanged) ────────────────────────────────────────────────
-
+// SVG Icons
 const IconTotal = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
@@ -70,7 +70,16 @@ const IconFileText = () => (
   </svg>
 );
 
-// ─── Component ────────────────────────────────────────────────────────────
+const getAssignedAgentName = (assignedTo) => {
+  if (!assignedTo) return null;
+  if (typeof assignedTo === 'object') {
+    if (assignedTo.fullName && assignedTo.fullName.trim()) return assignedTo.fullName;
+    if (assignedTo.firstName || assignedTo.lastName) {
+      return `${assignedTo.firstName || ''} ${assignedTo.lastName || ''}`.trim() || null;
+    }
+  }
+  return null;
+};
 
 const ClientDashboard = ({ user }) => {
   const [tickets, setTickets]               = useState([]);
@@ -80,14 +89,16 @@ const ClientDashboard = ({ user }) => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showChatModal, setShowChatModal]   = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
-
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage]     = useState('');
   const [formData, setFormData]             = useState({
     title: '', description: '', category: 'General', priority: 'MEDIUM',
   });
 
-  // ✅ TicketThread hook
+  // ── Pagination state ──
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize]       = useState(10);
+
   const {
     comments, loading: commentsLoading, sending, error: commentsError, send, reset,
   } = useTicketComments(
@@ -128,7 +139,7 @@ const ClientDashboard = ({ user }) => {
         title: formData.title, description: formData.description,
         category: formData.category, priority: formData.priority,
       });
-      setSuccessMessage(`Ticket #${newTicket.id} created successfully! Auto-assigned to an agent.`);
+      setSuccessMessage(`Ticket #${newTicket.id} created successfully!`);
       setFormData({ title: '', description: '', category: 'General', priority: 'MEDIUM' });
       setTimeout(() => { setShowCreateModal(false); setSuccessMessage(''); fetchTickets(); }, 2000);
     } catch (error) {
@@ -144,26 +155,10 @@ const ClientDashboard = ({ user }) => {
     setErrorMessage('');
   };
 
-  const openDetailsModal = (ticket) => {
-    setSelectedTicket(ticket);
-    setShowDetailsModal(true);
-  };
-
-  const openChatModal = (ticket) => {
-    setSelectedTicket(ticket);
-    setShowChatModal(true);
-  };
-
-  const closeDetailsModal = () => {
-    setShowDetailsModal(false);
-    setSelectedTicket(null);
-  };
-
-  const closeChatModal = () => {
-    reset();
-    setShowChatModal(false);
-    setSelectedTicket(null);
-  };
+  const openDetailsModal = (ticket) => { setSelectedTicket(ticket); setShowDetailsModal(true); };
+  const openChatModal    = (ticket) => { setSelectedTicket(ticket); setShowChatModal(true); };
+  const closeDetailsModal = () => { setShowDetailsModal(false); setSelectedTicket(null); };
+  const closeChatModal   = () => { reset(); setShowChatModal(false); setSelectedTicket(null); };
 
   const getStatusMeta = (status) => {
     switch (status) {
@@ -191,6 +186,13 @@ const ClientDashboard = ({ user }) => {
     { key: 'inProgress', label: 'In Progress',   value: tickets.filter(t => t.status === 'IN_PROGRESS').length, icon: <IconInProgress />, mod: 'cstat--progress' },
     { key: 'resolved',   label: 'Resolved',      value: tickets.filter(t => t.status === 'RESOLVED').length,    icon: <IconResolved />,   mod: 'cstat--resolved' },
   ];
+
+  // ── Paginated slice ──
+  const totalItems   = tickets.length;
+  const pagedTickets = tickets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className="cd">
@@ -246,56 +248,63 @@ const ClientDashboard = ({ user }) => {
             </button>
           </div>
         ) : (
-          <div className="cd__table-wrap">
-            <table className="cd__table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Category</th>
-                  <th>Assigned To</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map(ticket => {
-                  const sm = getStatusMeta(ticket.status);
-                  const pm = getPriorityMeta(ticket.priority);
-                  return (
-                    <tr key={ticket.id} className="cd__row">
-                      <td className="cd__cell-title">{ticket.title}</td>
-                      <td><span className={`cd__badge cd__badge--status ${sm.cls}`}>{sm.label}</span></td>
-                      <td><span className={`cd__badge cd__badge--priority ${pm.cls}`}>{pm.label}</span></td>
-                      <td className="cd__cell-cat">{ticket.category}</td>
-                      <td className="cd__cell-agent">
-                        {ticket.assignedToName ? (
-                          <span className="cd__agent-wrap">
-                            <span className="cd__agent-avatar">{ticket.assignedToName[0]}</span>
-                            {ticket.assignedToName}
-                          </span>
-                        ) : (
-                          <span className="cd__unassigned">—</span>
-                        )}
-                      </td>
-                      <td className="cd__cell-date">
-                        {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      <td className="cd__cell-actions">
-                        <button className="cd__btn-action cd__btn-chat" onClick={() => openChatModal(ticket)} title="Message">
-                          <IconMessageCircle />
-                        </button>
-                        <button className="cd__btn-action cd__btn-details" onClick={() => openDetailsModal(ticket)} title="Details">
-                          <IconFileText />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="cd__table-wrap">
+              <table className="cd__table">
+                <thead>
+                  <tr>
+                    <th>Title</th><th>Status</th><th>Priority</th>
+                    <th>Category</th><th>Assigned To</th><th>Created</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedTickets.map(ticket => {
+                    const sm = getStatusMeta(ticket.status);
+                    const pm = getPriorityMeta(ticket.priority);
+                    const agentName = getAssignedAgentName(ticket.assignedTo);
+                    return (
+                      <tr key={ticket.id} className="cd__row">
+                        <td className="cd__cell-title">{ticket.title}</td>
+                        <td><span className={`cd__badge cd__badge--status ${sm.cls}`}>{sm.label}</span></td>
+                        <td><span className={`cd__badge cd__badge--priority ${pm.cls}`}>{pm.label}</span></td>
+                        <td className="cd__cell-cat">{ticket.category}</td>
+                        <td className="cd__cell-agent">
+                          {agentName ? (
+                            <span className="cd__agent-wrap">
+                              <span className="cd__agent-avatar">{agentName[0]}</span>
+                              {agentName}
+                            </span>
+                          ) : (
+                            <span className="cd__unassigned">—</span>
+                          )}
+                        </td>
+                        <td className="cd__cell-date">
+                          {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="cd__cell-actions">
+                          <button className="cd__btn-action cd__btn-chat" onClick={() => openChatModal(ticket)} title="Message">
+                            <IconMessageCircle />
+                          </button>
+                          <button className="cd__btn-action cd__btn-details" onClick={() => openDetailsModal(ticket)} title="Details">
+                            <IconFileText />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Pagination ── */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            />
+          </>
         )}
       </section>
 
@@ -310,18 +319,12 @@ const ClientDashboard = ({ user }) => {
               </div>
               <button className="cd__modal-close" onClick={() => setShowCreateModal(false)}><IconClose /></button>
             </div>
-
             {successMessage && (
-              <div className="cd__modal-msg cd__modal-msg--success">
-                <IconCheckCircle /><p>{successMessage}</p>
-              </div>
+              <div className="cd__modal-msg cd__modal-msg--success"><IconCheckCircle /><p>{successMessage}</p></div>
             )}
             {errorMessage && (
-              <div className="cd__modal-msg cd__modal-msg--error">
-                <IconAlertCircle /><p>{errorMessage}</p>
-              </div>
+              <div className="cd__modal-msg cd__modal-msg--error"><IconAlertCircle /><p>{errorMessage}</p></div>
             )}
-
             <form onSubmit={handleCreateTicket} className="cd__form">
               <div className="cd__field">
                 <label>Title <span className="cd__req">*</span></label>
@@ -369,7 +372,7 @@ const ClientDashboard = ({ user }) => {
         </div>
       )}
 
-      {/* ✅ Details Modal ── */}
+      {/* ── Details Modal ── */}
       {showDetailsModal && selectedTicket && (
         <div className="cd__overlay" onClick={closeDetailsModal}>
           <div className="cd__modal" onClick={e => e.stopPropagation()}>
@@ -388,7 +391,6 @@ const ClientDashboard = ({ user }) => {
               </div>
               <button className="cd__modal-close" onClick={closeDetailsModal}><IconClose /></button>
             </div>
-
             <div className="cd__detail">
               <div className="cd__detail-grid">
                 <div className="cd__detail-cell">
@@ -413,13 +415,13 @@ const ClientDashboard = ({ user }) => {
                     {new Date(selectedTicket.createdAt).toLocaleString()}
                   </span>
                 </div>
-                {selectedTicket.assignedToName && (
+                {getAssignedAgentName(selectedTicket.assignedTo) && (
                   <div className="cd__detail-cell cd__detail-cell--full">
                     <label>Assigned To</label>
                     <span className="cd__detail-val">
                       <span className="cd__agent-wrap">
-                        <span className="cd__agent-avatar">{selectedTicket.assignedToName[0]}</span>
-                        {selectedTicket.assignedToName}
+                        <span className="cd__agent-avatar">{getAssignedAgentName(selectedTicket.assignedTo)[0]}</span>
+                        {getAssignedAgentName(selectedTicket.assignedTo)}
                       </span>
                     </span>
                   </div>
@@ -440,7 +442,7 @@ const ClientDashboard = ({ user }) => {
         </div>
       )}
 
-      {/* ✅ Chat Modal ── */}
+      {/* ── Chat Modal ── */}
       {showChatModal && selectedTicket && (
         <div className="cd__overlay" onClick={closeChatModal}>
           <div className="cd__modal cd__modal--comms" onClick={e => e.stopPropagation()}>
@@ -459,17 +461,17 @@ const ClientDashboard = ({ user }) => {
               </div>
               <button className="cd__modal-close" onClick={closeChatModal}><IconClose /></button>
             </div>
-
             <div className="cd__thread-wrap">
-            <TicketThread
-              comments={comments}
-              loading={commentsLoading}
-              sending={sending}
-              error={commentsError}
-              currentUserId={user?.id}
-              isAgent={false}
-              onSend={send}
-            />
+              <TicketThread
+                comments={comments}
+                loading={commentsLoading}
+                sending={sending}
+                error={commentsError}
+                currentUserId={user?.id}
+                isAgent={false}
+                ticket={selectedTicket}
+                onSend={send}
+              />
             </div>
           </div>
         </div>

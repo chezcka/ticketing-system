@@ -101,13 +101,7 @@ export default function Sidebar() {
         path: '/tickets',
         roles: [ROLES.CLIENT],
       },
-      {
-        id: 'create-ticket',
-        label: 'New Ticket',
-        icon: <Icons.Plus />,
-        path: '/tickets/create',
-        roles: [ROLES.CLIENT],
-      },
+      // ✅ REMOVED: New Ticket tab - clients can create from dashboard
     ];
 
     const agentItems = [
@@ -117,13 +111,6 @@ export default function Sidebar() {
         icon: <Icons.ClipboardList />,
         path: '/tickets/assigned',
         roles: [ROLES.SUPPORT_AGENT],
-      },
-      {
-        id: 'all-tickets',
-        label: 'All Tickets',
-        icon: <Icons.Ticket />,
-        path: '/tickets',
-        roles: [ROLES.SUPPORT_AGENT, ROLES.ADMIN],
       },
     ];
 

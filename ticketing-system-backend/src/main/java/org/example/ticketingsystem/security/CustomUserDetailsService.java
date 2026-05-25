@@ -2,6 +2,7 @@ package org.example.ticketingsystem.security;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.ticketingsystem.model.User;
+import org.example.ticketingsystem.model.UserStatus;
 import org.example.ticketingsystem.repository.UserRepository;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -36,13 +37,15 @@ public class CustomUserDetailsService implements UserDetailsService {
                     return new UsernameNotFoundException("User not found with email: " + email);
                 });
 
+        // ✅ Check if user is deleted
         if (user.getIsDeleted()) {
             log.warn("Attempted login with deleted user: {}", email);
             throw new UsernameNotFoundException("User account has been deleted");
         }
 
-        if (!user.getActive()) {
-            log.warn("Attempted login with inactive user: {}", email);
+        // ✅ Check if user status is ACTIVE (not INACTIVE or SUSPENDED)
+        if (user.getStatus() != UserStatus.ACTIVE) {
+            log.warn("Attempted login with inactive user: {} (status: {})", email, user.getStatus());
             throw new UsernameNotFoundException("User account is inactive");
         }
 

@@ -23,7 +23,6 @@ public class User {
     @Column(nullable = false)
     private String fullName;
 
-    // ⭐ ADD THESE 3 FIELDS
     @Column(length = 20)
     private String phone;
 
@@ -37,8 +36,10 @@ public class User {
     @Enumerated(EnumType.STRING)
     private UserRole role;
 
+    // ⭐ REPLACE 'active' WITH 'status' ENUM
     @Column(nullable = false)
-    private Boolean active = true;
+    @Enumerated(EnumType.STRING)
+    private UserStatus status = UserStatus.ACTIVE;
 
     @Column(name = "is_deleted", nullable = false)
     private Boolean isDeleted = false;
