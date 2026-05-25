@@ -3,9 +3,9 @@ package org.example.ticketingsystem.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.ticketingsystem.dto.CommentCreateRequest;
 import org.example.ticketingsystem.dto.CommentResponse;
+import org.example.ticketingsystem.security.JwtAuthenticationFilter;
 import org.example.ticketingsystem.service.CommentService;
 import org.example.ticketingsystem.util.JwtTokenProvider;
-import org.example.ticketingsystem.security.JwtAuthenticationFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +39,6 @@ class CommentControllerTest {
     @MockBean
     private JwtTokenProvider jwtTokenProvider;
 
-    // 🔥 THIS IS THE MISSING PIECE (CRITICAL)
     @MockBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
@@ -114,4 +113,48 @@ class CommentControllerTest {
                         .header("Authorization", AUTH))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    void addComment_userIdNull_returnsBadRequest() throws Exception {
+        when(jwtTokenProvider.getUserIdFromToken(anyString())).thenReturn(null);
+
+        mockMvc.perform(post("/api/tickets/1/comments")
+                        .header("Authorization", AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void addComment_illegalArgument_returns400() throws Exception {
+        when(jwtTokenProvider.getUserIdFromToken(anyString())).thenReturn(100L);
+        when(commentService.addComment(anyLong(), anyLong(), any()))
+                .thenThrow(new IllegalArgumentException("Invalid"));
+
+        mockMvc.perform(post("/api/tickets/1/comments")
+                        .header("Authorization", AUTH)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void getComments_exception_returns500() throws Exception {
+        when(commentService.getTicketComments(1L))
+                .thenThrow(new RuntimeException("DB failure"));
+
+        mockMvc.perform(get("/api/tickets/1/comments"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void deleteComment_userIdNull_returnsBadRequest() throws Exception {
+        when(jwtTokenProvider.getUserIdFromToken(anyString())).thenReturn(null);
+
+        mockMvc.perform(delete("/api/tickets/comments/1")
+                        .header("Authorization", AUTH))
+                .andExpect(status().isBadRequest());
+    }
+
+
 }

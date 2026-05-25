@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.example.ticketingsystem.dto.*;
 import org.example.ticketingsystem.model.TicketStatus;
 import org.example.ticketingsystem.service.TicketService;
+import org.example.ticketingsystem.service.WorkloadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +21,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -34,6 +34,9 @@ class TicketControllerTest {
 
     @MockBean
     private TicketService ticketService;
+
+    @MockBean
+    private WorkloadService workloadService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -181,4 +184,85 @@ class TicketControllerTest {
         mockMvc.perform(delete("/api/tickets/1"))
                 .andExpect(status().isOk());
     }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testGetAgentsWithWorkloadSuccess() throws Exception {
+
+        List<WorkloadService.AgentWorkloadInfo> workloads = List.of(
+                mock(WorkloadService.AgentWorkloadInfo.class)
+        );
+
+        when(ticketService.getAllTickets(any(Pageable.class))).thenReturn(Page.empty());
+
+        when(workloadService.getAllAgentWorkloads()).thenReturn(workloads);
+
+        mockMvc.perform(get("/api/tickets/agents/workload"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Agent workloads retrieved"));
+    }
+
+    @Test
+    @WithMockUser
+    void testGetMyTicketsSuccess() throws Exception {
+
+        Page<TicketResponse> page = new PageImpl<>(List.of(ticketResponse));
+
+        when(ticketService.getUserTickets(anyLong(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/tickets/user/mine")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Your tickets retrieved"));
+    }
+
+    @Test
+    @WithMockUser
+    void testGetAssignedTicketsSuccess() throws Exception {
+
+        Page<TicketResponse> page = new PageImpl<>(List.of(ticketResponse));
+
+        when(ticketService.getAssignedTickets(anyLong(), any(Pageable.class)))
+                .thenReturn(page);
+
+        mockMvc.perform(get("/api/tickets/assigned/me")
+                        .header("Authorization", "Bearer token"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Your assigned tickets retrieved"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testAutoAssignTicketSuccess() throws Exception {
+
+        when(ticketService.autoAssignTicket(1L)).thenReturn(ticketResponse);
+
+        mockMvc.perform(patch("/api/tickets/1/auto-assign"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Ticket auto-assigned successfully"));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void testResolveTicketSuccess() throws Exception {
+
+        when(ticketService.resolveTicket(1L)).thenReturn(ticketResponse);
+
+        mockMvc.perform(patch("/api/tickets/1/resolve"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Ticket marked as resolved"));
+    }
+
+    @Test
+    @WithMockUser
+    void testCloseTicketSuccess() throws Exception {
+
+        when(ticketService.closeTicket(1L)).thenReturn(ticketResponse);
+
+        mockMvc.perform(patch("/api/tickets/1/close"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Ticket closed"));
+    }
+
 }

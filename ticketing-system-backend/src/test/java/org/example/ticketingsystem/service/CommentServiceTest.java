@@ -207,4 +207,202 @@ public class CommentServiceTest {
         assertEquals("Updated comment content", response.getContent());
         verify(commentRepository, times(1)).save(any(Comment.class));
     }
+
+    @Test
+    public void testGetTicketComments_ticketNotFound() {
+        when(ticketRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.getTicketComments(999L));
+
+        verify(commentRepository, never()).findByTicketId(anyLong());
+    }
+
+    @Test
+    public void testGetTicketComments_emptyList() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(commentRepository.findByTicketId(1L)).thenReturn(List.of());
+
+        List<CommentResponse> responses = commentService.getTicketComments(1L);
+
+        assertNotNull(responses);
+        assertTrue(responses.isEmpty());
+    }
+
+    @Test
+    public void testGetTicketCommentsForClient_filtersInternalComments() {
+        Comment publicComment = new Comment();
+        publicComment.setId(1L);
+        publicComment.setTicketId(1L);
+        publicComment.setUserId(1L);
+        publicComment.setContent("Public");
+        publicComment.setIsInternal(false);
+
+        Comment internalComment = new Comment();
+        internalComment.setId(2L);
+        internalComment.setTicketId(1L);
+        internalComment.setUserId(1L);
+        internalComment.setContent("Internal");
+        internalComment.setIsInternal(true);
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(commentRepository.findByTicketId(1L))
+                .thenReturn(List.of(publicComment, internalComment));
+
+        List<CommentResponse> responses =
+                commentService.getTicketCommentsForClient(1L);
+
+        assertEquals(1, responses.size());
+        assertEquals("Public", responses.get(0).getContent());
+    }
+
+    @Test
+    public void testGetTicketCommentsForClient_ticketNotFound() {
+        when(ticketRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.getTicketCommentsForClient(999L));
+    }
+
+    @Test
+    public void testGetCommentSuccess() {
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+
+        CommentResponse response = commentService.getComment(1L);
+
+        assertNotNull(response);
+        assertEquals(1L, response.getId());
+    }
+
+    @Test
+    public void testGetCommentNotFound() {
+        when(commentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.getComment(999L));
+    }
+
+    @Test
+    public void testUpdateComment_notOwner() {
+        testComment.setUserId(5L);
+
+        CommentCreateRequest req = new CommentCreateRequest();
+        req.setContent("Updated");
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.updateComment(1L, 1L, req));
+
+        verify(commentRepository, never()).save(any());
+    }
+
+    @Test
+    public void testUpdateComment_notFound() {
+        CommentCreateRequest req = new CommentCreateRequest();
+        req.setContent("Updated");
+
+        when(commentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.updateComment(999L, 1L, req));
+    }
+
+    @Test
+    public void testUpdateComment_blankContent_keepsOriginal() {
+        testComment.setContent("Original");
+
+        CommentCreateRequest req = new CommentCreateRequest();
+        req.setContent(" ");
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(commentRepository.save(any(Comment.class))).thenReturn(testComment);
+
+        CommentResponse response =
+                commentService.updateComment(1L, 1L, req);
+
+        assertEquals("Original", response.getContent());
+    }
+
+    @Test
+    public void testDeleteComment_notOwner() {
+        testComment.setUserId(5L);
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.deleteComment(1L, 1L));
+
+        verify(commentRepository, never()).delete(any());
+    }
+
+    @Test
+    public void testDeleteComment_notFound() {
+        when(commentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> commentService.deleteComment(999L, 1L));
+    }
+
+    @Test
+    public void testGetUserCommentsSuccess() {
+        when(commentRepository.findByUserId(1L))
+                .thenReturn(List.of(testComment));
+
+        when(userRepository.findById(1L))
+                .thenReturn(Optional.of(testUser));
+
+        List<CommentResponse> responses =
+                commentService.getUserComments(1L);
+
+        assertEquals(1, responses.size());
+    }
+
+    @Test
+    public void testAddComment_flushFailure() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(commentRepository.save(any(Comment.class))).thenReturn(testComment);
+
+        doThrow(new RuntimeException("DB flush failed"))
+                .when(commentRepository).flush();
+
+        assertThrows(RuntimeException.class,
+                () -> commentService.addComment(1L, 1L, commentRequest));
+    }
+
+    @Test
+    public void testAddComment_websocketFailure_stillSucceeds() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(commentRepository.save(any(Comment.class))).thenReturn(testComment);
+
+        doNothing().when(commentRepository).flush();
+
+        doThrow(new RuntimeException("WebSocket failed"))
+                .when(messagingTemplate)
+                .convertAndSend(anyString(), any(CommentResponse.class));
+
+        CommentResponse response =
+                commentService.addComment(1L, 1L, commentRequest);
+
+        assertNotNull(response);
+    }
+
+
+
+    @Test
+    public void testConvertToResponse_userWithoutRole() {
+        testUser.setRole(null);
+
+        when(commentRepository.findById(1L)).thenReturn(Optional.of(testComment));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+
+        CommentResponse response = commentService.getComment(1L);
+
+        assertNotNull(response);
+        assertNull(response.getAuthorRole());
+    }
+
 }

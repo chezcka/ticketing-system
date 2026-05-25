@@ -218,12 +218,234 @@ public class TicketServiceTest {
     }
 
     @Test
-    public void testDeleteTicketSuccess() {
+    void testDeleteTicketSuccess() {
+
         when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
-        doNothing().when(ticketRepository).delete(any(Ticket.class));
+        doNothing().when(commentRepository).deleteByTicketId(1L);
+        doNothing().when(ticketRepository).delete(testTicket);
 
         ticketService.deleteTicket(1L);
 
-        verify(ticketRepository, times(1)).delete(testTicket);
+        verify(commentRepository).deleteByTicketId(1L);
+        verify(ticketRepository).delete(testTicket);
     }
+
+    @Test
+    void testGetUserTicketsSuccess() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Ticket> page = new PageImpl<>(List.of(testTicket));
+
+        when(ticketRepository.findByCreatedBy(1L, pageable))
+                .thenReturn(page);
+        when(commentRepository.countByTicketId(anyLong())).thenReturn(0L);
+
+        Page<TicketResponse> result = ticketService.getUserTickets(1L, pageable);
+
+        assertEquals(1, result.getContent().size());
+    }
+
+    @Test
+    void testGetAssignedTicketsSuccess() {
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Ticket> page = new PageImpl<>(List.of(testTicket));
+
+        when(ticketRepository.findByAssignedTo(2L, pageable))
+                .thenReturn(page);
+        when(commentRepository.countByTicketId(anyLong())).thenReturn(0L);
+
+        Page<TicketResponse> result = ticketService.getAssignedTickets(2L, pageable);
+
+        assertEquals(1, result.getContent().size());
+    }
+
+    @Test
+    void testUpdateTicketAllFields() {
+
+        TicketUpdateRequest req = new TicketUpdateRequest();
+        req.setTitle("Updated");
+        req.setDescription("Updated desc");
+        req.setCategory("NewCat");
+        req.setPriority("HIGH");
+        req.setStatus("RESOLVED");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(ticketRepository.save(any(Ticket.class))).thenReturn(testTicket);
+        when(commentRepository.countByTicketId(anyLong())).thenReturn(0L);
+
+        TicketResponse res = ticketService.updateTicket(1L, req);
+
+        assertNotNull(res);
+    }
+
+    @Test
+    void testUpdateStatusSuccess() {
+
+        TicketStatusRequest req = new TicketStatusRequest();
+        req.setStatus("IN_PROGRESS");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(ticketRepository.save(any(Ticket.class))).thenReturn(testTicket);
+
+        TicketResponse res = ticketService.updateStatus(1L, req);
+
+        assertNotNull(res);
+    }
+
+    @Test
+    void testResolveTicketSuccess() {
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(ticketRepository.save(any(Ticket.class))).thenReturn(testTicket);
+
+        TicketResponse res = ticketService.resolveTicket(1L);
+
+        assertNotNull(res);
+    }
+
+    @Test
+    void testCloseTicketSuccess() {
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(ticketRepository.save(any(Ticket.class))).thenReturn(testTicket);
+
+        TicketResponse res = ticketService.closeTicket(1L);
+
+        assertNotNull(res);
+    }
+
+    @Test
+    void testGetTicketStatsSuccess() {
+
+        when(ticketRepository.countByStatus(TicketStatus.OPEN)).thenReturn(1L);
+        when(ticketRepository.countByStatus(TicketStatus.IN_PROGRESS)).thenReturn(2L);
+        when(ticketRepository.countByStatus(TicketStatus.RESOLVED)).thenReturn(3L);
+        when(ticketRepository.countByStatus(TicketStatus.CLOSED)).thenReturn(4L);
+
+        TicketService.TicketStatsResponse res = ticketService.getTicketStats();
+
+        assertEquals(1L, res.getOpenCount());
+        assertEquals(2L, res.getInProgressCount());
+        assertEquals(3L, res.getResolvedCount());
+        assertEquals(4L, res.getClosedCount());
+    }
+
+    @Test
+    void testCreateTicketNoAgentAvailable() {
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
+        when(ticketRepository.save(any(Ticket.class))).thenReturn(testTicket);
+        when(workloadService.assignToLeastBusyAgent()).thenReturn(null);
+        when(commentRepository.countByTicketId(anyLong())).thenReturn(0L);
+
+        TicketResponse res = ticketService.createTicket(1L, ticketCreateRequest);
+
+        assertNotNull(res);
+    }
+
+    @Test
+    void testCreateTicket_userNotFound() {
+        when(userRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.createTicket(1L, ticketCreateRequest));
+    }
+
+    @Test
+    void testAssignTicket_ticketNotFound() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.assignTicket(1L, 2L));
+    }
+
+    @Test
+    void testAssignTicket_agentNotFound() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+        when(userRepository.findById(2L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.assignTicket(1L, 2L));
+    }
+
+    @Test
+    void testUpdateTicket_invalidPriority() {
+        TicketUpdateRequest req = new TicketUpdateRequest();
+        req.setPriority("INVALID");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.updateTicket(1L, req));
+    }
+
+    @Test
+    void testUpdateTicket_invalidStatus() {
+        TicketUpdateRequest req = new TicketUpdateRequest();
+        req.setStatus("INVALID");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.updateTicket(1L, req));
+    }
+
+    @Test
+    void testUpdateStatus_invalidStatus() {
+        TicketStatusRequest req = new TicketStatusRequest();
+        req.setStatus("BAD_STATUS");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.of(testTicket));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.updateStatus(1L, req));
+    }
+
+    @Test
+    void testDeleteTicket_notFound() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.deleteTicket(1L));
+    }
+
+    @Test
+    void testResolveTicket_notFound() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.resolveTicket(1L));
+    }
+
+    @Test
+    void testCloseTicket_notFound() {
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.closeTicket(1L));
+    }
+
+    @Test
+    void testUpdateTicket_notFound() {
+        TicketUpdateRequest req = new TicketUpdateRequest();
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.updateTicket(1L, req));
+    }
+
+    @Test
+    void testUpdateStatus_notFound() {
+        TicketStatusRequest req = new TicketStatusRequest();
+        req.setStatus("OPEN");
+
+        when(ticketRepository.findById(1L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ticketService.updateStatus(1L, req));
+    }
+
+
 }
