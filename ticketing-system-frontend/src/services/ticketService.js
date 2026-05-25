@@ -26,7 +26,7 @@ export const getAllTickets = async (filters = {}) => {
   }
 };
  
-export const getUserTickets = async (page = 0, size = 10) => {
+export const getUserTickets = async (page = 0, size = 1000) => {
   try {
     const response = await api.get(`/tickets/user/mine?page=${page}&size=${size}`);
     console.log('getUserTickets response:', response.data);
