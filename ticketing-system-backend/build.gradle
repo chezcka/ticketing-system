@@ -33,6 +33,7 @@ dependencies {
     // Database & ORM
     // ============================================================================
     runtimeOnly 'com.mysql:mysql-connector-j'
+    testImplementation 'com.h2database:h2'
     implementation 'org.hibernate.orm:hibernate-core:7.2.12.Final'
 
     // ============================================================================
@@ -55,6 +56,9 @@ dependencies {
     // ============================================================================
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.mockito:mockito-core:5.7.0'
+    testImplementation 'org.mockito:mockito-junit-jupiter:5.7.0'
+    testImplementation 'junit:junit:4.13.2'
 }
 
 tasks.named('test') {
