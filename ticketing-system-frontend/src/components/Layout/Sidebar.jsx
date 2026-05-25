@@ -132,20 +132,7 @@ export default function Sidebar() {
     ];
 
     const profileItems = [
-      {
-        id: 'profile',
-        label: 'Profile',
-        icon: <Icons.User />,
-        path: '/profile',
-        roles: [ROLES.CLIENT, ROLES.SUPPORT_AGENT, ROLES.ADMIN],
-      },
-      {
-        id: 'settings',
-        label: 'Settings',
-        icon: <Icons.Settings />,
-        path: '/settings',
-        roles: [ROLES.CLIENT, ROLES.SUPPORT_AGENT, ROLES.ADMIN],
-      },
+      
     ];
 
     let items = [...commonItems];
