@@ -1,0 +1,147 @@
+/* ============================================================================
+   Pagination.css — Shared pagination component
+   ============================================================================ */
+
+.pgn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid #e4e7ec;
+  background: #f9fafb;
+  flex-wrap: wrap;
+  font-family: 'Poppins', system-ui, sans-serif;
+}
+
+/* ── Info text ── */
+.pgn__info {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  white-space: nowrap;
+  min-width: 80px;
+}
+
+/* ── Controls (page buttons) ── */
+.pgn__controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pgn__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #374151;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 120ms ease;
+  line-height: 1;
+}
+
+.pgn__btn:hover:not(:disabled) {
+  background: #fff7ed;
+  border-color: #ea6c00;
+  color: #ea6c00;
+}
+
+.pgn__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pgn__btn--active {
+  background: #ea6c00;
+  border-color: #ea6c00;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: default;
+  box-shadow: 0 2px 6px rgba(234, 108, 0, 0.3);
+}
+
+.pgn__btn--active:hover {
+  background: #ea6c00;
+  border-color: #ea6c00;
+  color: #ffffff;
+}
+
+.pgn__btn--icon {
+  min-width: 32px;
+}
+
+.pgn__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 32px;
+  font-size: 13px;
+  color: #9ca3af;
+  user-select: none;
+}
+
+/* ── Page size selector ── */
+.pgn__size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.pgn__size-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.pgn__size-select {
+  padding: 5px 24px 5px 8px;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  background: #ffffff;
+  font-family: 'Poppins', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 120ms ease;
+}
+
+.pgn__size-select:focus {
+  outline: none;
+  border-color: #ea6c00;
+  box-shadow: 0 0 0 3px rgba(234, 108, 0, 0.1);
+}
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  .pgn {
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .pgn__info {
+    width: 100%;
+    text-align: center;
+  }
+
+  .pgn__size {
+    width: 100%;
+    justify-content: center;
+  }
+}

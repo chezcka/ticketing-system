@@ -17,11 +17,22 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import NotFoundPage from './pages/NotFoundPage';
 import UsersPage from './pages/UsersPage';
 
-// Protected Route Component
+// Protected Route Component - UPDATED WITH DEACTIVATION CHECK
 function ProtectedRoute({ children }) {
   const { user } = useAuth();
   
   if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // ✅ Check if user is deactivated (status = INACTIVE or active = false)
+  if (user.status === 'INACTIVE' || user.active === false) {
+    // Clear localStorage to prevent infinite refresh loops
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('role');
+    
+    // Redirect to login without page refresh (using <Navigate> instead of window.location)
     return <Navigate to="/login" replace />;
   }
   

@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.ticketingsystem.model.Ticket;
 import org.example.ticketingsystem.model.TicketStatus;
 import org.example.ticketingsystem.model.UserRole;
+import org.example.ticketingsystem.model.UserStatus;
 import org.example.ticketingsystem.repository.TicketRepository;
 import org.example.ticketingsystem.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -40,30 +41,31 @@ public class WorkloadService {
     public Map<Long, Integer> getAgentWorkloads() {
         Map<Long, Integer> workloads = new HashMap<>();
 
-        // ⭐ FIX: Properly handle Boolean null values
-        // Database columns (is_deleted, active) are NULLABLE, so Boolean can be null
-        // When is_deleted is NULL → treat as NOT deleted (false)
-        // When active is NULL → treat as NOT active (false, don't assign)
+        // ⭐ FIX: Use UserStatus enum instead of active boolean
+        // Only count agents that are:
+        // 1. Not deleted (isDeleted = false)
+        // 2. Status = ACTIVE (can login and receive assignments)
+        // 3. Role = SUPPORT_AGENT or ADMIN
         userRepository.findAll().stream()
-                .peek(user -> log.debug("Checking user: {} (deleted: {}, active: {}, role: {})",
-                        user.getEmail(), user.getIsDeleted(), user.getActive(), user.getRole()))
+                .peek(user -> log.debug("Checking user: {} (deleted: {}, status: {}, role: {})",
+                        user.getEmail(), user.getIsDeleted(), user.getStatus(), user.getRole()))
                 .filter(user -> {
                     Boolean isDeleted = user.getIsDeleted();
-                    Boolean isActive = user.getActive();
+                    UserStatus status = user.getStatus();
 
-                    // ✅ Safe boolean conversion:
+                    // ✅ Safe checks:
                     boolean notDeleted = isDeleted == null || !isDeleted;  // NULL → not deleted
-                    boolean isActiveUser = isActive != null && isActive;   // NULL → not active
+                    boolean isActive = status == UserStatus.ACTIVE;        // Only ACTIVE users can receive tickets
                     boolean isAgent = user.getRole() == UserRole.SUPPORT_AGENT || user.getRole() == UserRole.ADMIN;
 
-                    boolean passes = notDeleted && isActiveUser && isAgent;
+                    boolean passes = notDeleted && isActive && isAgent;
 
                     if (passes) {
-                        log.info("✅ Agent QUALIFIES: {} (ID: {}, deleted: {}, active: {}, role: {})",
-                                user.getFullName(), user.getId(), isDeleted, isActive, user.getRole());
+                        log.info("✅ Agent QUALIFIES: {} (ID: {}, deleted: {}, status: {}, role: {})",
+                                user.getFullName(), user.getId(), isDeleted, status, user.getRole());
                     } else {
-                        log.debug("❌ Agent FILTERED OUT: {} - notDeleted:{} active:{} isAgent:{}",
-                                user.getEmail(), notDeleted, isActiveUser, isAgent);
+                        log.debug("❌ Agent FILTERED OUT: {} - notDeleted:{} status:{} isAgent:{}",
+                                user.getEmail(), notDeleted, status, isAgent);
                     }
 
                     return passes;

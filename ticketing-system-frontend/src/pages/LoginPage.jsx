@@ -39,7 +39,17 @@ const LoginPage = () => {
       success('Login successful! Redirecting...');
       setTimeout(() => navigate('/dashboard'), 1000);
     } catch (err) {
-      const message = err.message || 'Login failed. Please try again.';
+      let message = err.message || 'Login failed. Please try again.';
+      
+      // ✅ Check for deactivated user error
+      if (message.includes('inactive') || message.includes('deactivated')) {
+        message = 'User account is deactivated. Please contact administrator.';
+      } else if (message.includes('Invalid email or password')) {
+        message = 'Invalid email or password. Please try again.';
+      } else if (message.includes('User not found')) {
+        message = 'Invalid email or password. Please try again.';
+      }
+      
       setError(message);
       errorToast(message);
     } finally {

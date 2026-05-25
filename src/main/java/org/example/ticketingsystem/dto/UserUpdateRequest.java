@@ -8,9 +8,12 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UserUpdateRequest {
-    private String fullName;
+    private String firstName;
+    private String lastName;
+    private String email;
     private String phone;
     private String department;
+    private String status;
     private String notificationPreferences;
     private String newPassword;
 }

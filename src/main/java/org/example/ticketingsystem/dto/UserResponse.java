@@ -14,6 +14,6 @@ public class UserResponse {
     private String phone;
     private String department;
     private String role;
-    private Boolean active;
+    private String status;
     private String notificationPreferences;
 }

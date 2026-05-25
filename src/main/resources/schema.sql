@@ -1,6 +1,7 @@
 -- ============================================================================
 -- Ticketing System Database Schema
--- Complete schema with 3 test users: Admin, Support Agent, Client
+-- UPDATED: Uses status VARCHAR instead of active BOOLEAN
+-- This preserves existing users when applied as a migration
 -- ============================================================================
 
 -- Create database if it doesn't exist
@@ -10,22 +11,25 @@ CREATE DATABASE IF NOT EXISTS ticketing_system;
 USE ticketing_system;
 
 -- ============================================================================
--- Users Table
+-- Users Table - UPDATED WITH STATUS COLUMN
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS users (
                                      id BIGINT AUTO_INCREMENT PRIMARY KEY,
                                      email VARCHAR(255) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
+    phone VARCHAR(20),
+    department VARCHAR(50),
+    notification_preferences JSON,
     role VARCHAR(50) NOT NULL DEFAULT 'CLIENT',
-    active BOOLEAN NOT NULL DEFAULT TRUE,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
     deleted_at TIMESTAMP NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
     INDEX idx_role (role),
-    INDEX idx_active (active),
+    INDEX idx_status (status),
     INDEX idx_is_deleted (is_deleted)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -184,10 +188,10 @@ CREATE TABLE IF NOT EXISTS email_notifications (
 --    Password: Demo@123456
 --    Hash: $2a$10$3fuJL/qZq7qPbDEQHo9zGuE8NjHVSKfDvNVVDLl0A6X8YGgVVL4oO
 
-INSERT IGNORE INTO users (id, email, password, full_name, role, active, is_deleted, created_at, updated_at) VALUES
-(1, 'admin@ticketing.com', '$2a$10$slYQmyNdGzin7olVN4yYyOj/iHEZVHV.W4xLlvBfzX7vN5Dqv2pAm', 'Administrator', 'ADMIN', TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(2, 'agent@ticketing.com', '$2a$10$3fuJL/qZq7qPbDEQHo9zGuE8NjHVSKfDvNVVDLl0A6X8YGgVVL4oO', 'Support Agent', 'SUPPORT_AGENT', TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-(3, 'client@ticketing.com', '$2a$10$3fuJL/qZq7qPbDEQHo9zGuE8NjHVSKfDvNVVDLl0A6X8YGgVVL4oO', 'Client User', 'CLIENT', TRUE, FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+INSERT IGNORE INTO users (id, email, password, full_name, role, status, is_deleted, created_at, updated_at) VALUES
+(1, 'admin@ticketing.com', '$2a$10$slYQmyNdGzin7olVN4yYyOj/iHEZVHV.W4xLlvBfzX7vN5Dqv2pAm', 'Administrator', 'ADMIN', 'ACTIVE', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(2, 'agent@ticketing.com', '$2a$10$3fuJL/qZq7qPbDEQHo9zGuE8NjHVSKfDvNVVDLl0A6X8YGgVVL4oO', 'Support Agent', 'SUPPORT_AGENT', 'ACTIVE', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+(3, 'client@ticketing.com', '$2a$10$3fuJL/qZq7qPbDEQHo9zGuE8NjHVSKfDvNVVDLl0A6X8YGgVVL4oO', 'Client User', 'CLIENT', 'ACTIVE', FALSE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- ============================================================================
 -- END OF SCHEMA
@@ -200,18 +204,21 @@ INSERT IGNORE INTO users (id, email, password, full_name, role, active, is_delet
 --    Email: admin@ticketing.com
 --    Password: Admin@123456
 --    Role: ADMIN
+--    Status: ACTIVE
 --    Dashboard: AdminDashboard - Create tickets, assign to agents, view all
 --
 -- 2. SUPPORT AGENT (Resolve Tickets)
 --    Email: agent@ticketing.com
 --    Password: Demo@123456
 --    Role: SUPPORT_AGENT
+--    Status: ACTIVE
 --    Dashboard: AgentDashboard - View assigned tickets, resolve issues
 --
 -- 3. CLIENT (Submit Tickets)
 --    Email: client@ticketing.com
 --    Password: Demo@123456
 --    Role: CLIENT
+--    Status: ACTIVE
 --    Dashboard: ClientDashboard - Submit tickets, track status
 --
 -- ============================================================================

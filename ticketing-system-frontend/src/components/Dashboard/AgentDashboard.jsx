@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getAllTickets, updateTicket } from '../../services/ticketService';
 import { useTicketComments } from '../../hooks/useTicketComments';
 import TicketThread from '../Common/TicketThread';
+import Pagination from '../Common/Pagination';
 import './AgentDashboard.css';
 
 // ─── SVG Icons ──────────────────────────────────────────────────────────────
@@ -68,7 +69,10 @@ const AgentDashboard = ({ user }) => {
   const [saving, setSaving]                   = useState(false);
   const [saveSuccess, setSaveSuccess]         = useState(false);
 
-  // ── Communication hook ──────────────────────────────────────────────────────
+  // ── Pagination state ──
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize]       = useState(10);
+
   const {
     comments, loading: commentsLoading, sending, error: commentsError, send, reset,
   } = useTicketComments(
@@ -82,12 +86,20 @@ const AgentDashboard = ({ user }) => {
 
   useEffect(() => {
     const agentId = user?.id ? Number(user.id) : null;
-    let filtered = allTickets.filter(t =>
-      t.assignedTo ? Number(t.assignedTo) === agentId : false
-    );
+    const getAssignedToId = (assignedTo) => {
+      if (!assignedTo) return null;
+      return typeof assignedTo === 'object' ? assignedTo.id : assignedTo;
+    };
+
+    let filtered = allTickets.filter(t => {
+      const assignedId = getAssignedToId(t.assignedTo);
+      return assignedId && Number(assignedId) === agentId;
+    });
+
     if (statusFilter !== 'all')   filtered = filtered.filter(t => t.status === statusFilter);
     if (priorityFilter !== 'all') filtered = filtered.filter(t => t.priority === priorityFilter);
     setFilteredTickets(filtered);
+    setCurrentPage(1); // reset page on filter change
   }, [allTickets, statusFilter, priorityFilter, user?.id]);
 
   const fetchTickets = async () => {
@@ -132,25 +144,15 @@ const AgentDashboard = ({ user }) => {
 
   const handleUpdateTicket = async () => {
     if (!selectedTicket) return;
-    
     try {
       setSaving(true);
-      
-      // Update ticket on backend
       await updateTicket(selectedTicket.id, {
         status:   updateForm.status   || selectedTicket.status,
         priority: updateForm.priority || selectedTicket.priority,
       });
-      
-      // Refresh all tickets to get latest data
       await fetchTickets();
-      
-      // Show success state briefly, then close
       setSaveSuccess(true);
-      setTimeout(() => {
-        closeDetailsModal();
-      }, 800); // Close after showing success for 800ms
-      
+      setTimeout(() => { closeDetailsModal(); }, 800);
     } catch (error) {
       console.error('Error updating ticket:', error);
       setSaveSuccess(false);
@@ -177,16 +179,28 @@ const AgentDashboard = ({ user }) => {
     }
   };
 
-  const agentId         = user?.id ? Number(user.id) : null;
-  const assignedCount   = allTickets.filter(t => t.assignedTo && Number(t.assignedTo) === agentId).length;
-  const inProgressCount = allTickets.filter(t => t.assignedTo && Number(t.assignedTo) === agentId && t.status === 'IN_PROGRESS').length;
-  const resolvedCount   = allTickets.filter(t => t.assignedTo && Number(t.assignedTo) === agentId && t.status === 'RESOLVED').length;
+  const getAssignedToId = (assignedTo) => {
+    if (!assignedTo) return null;
+    return typeof assignedTo === 'object' ? assignedTo.id : assignedTo;
+  };
+
+  const agentId = user?.id ? Number(user.id) : null;
+  const assignedCount   = allTickets.filter(t => { const id = getAssignedToId(t.assignedTo); return id && Number(id) === agentId; }).length;
+  const inProgressCount = allTickets.filter(t => { const id = getAssignedToId(t.assignedTo); return id && Number(id) === agentId && t.status === 'IN_PROGRESS'; }).length;
+  const resolvedCount   = allTickets.filter(t => { const id = getAssignedToId(t.assignedTo); return id && Number(id) === agentId && t.status === 'RESOLVED'; }).length;
 
   const stats = [
     { key: 'assigned',  label: 'Assigned to You', value: assignedCount,   icon: <IconAssigned />,   mod: 'stat--assigned' },
     { key: 'progress',  label: 'In Progress',      value: inProgressCount, icon: <IconInProgress />, mod: 'stat--progress' },
     { key: 'resolved',  label: 'Resolved',         value: resolvedCount,   icon: <IconResolved />,   mod: 'stat--resolved' },
   ];
+
+  // ── Paginated slice ──
+  const totalItems  = filteredTickets.length;
+  const pagedTickets = filteredTickets.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className="agd">
@@ -247,43 +261,54 @@ const AgentDashboard = ({ user }) => {
         ) : filteredTickets.length === 0 ? (
           <div className="agd__empty"><IconTickets /><p>No tickets assigned to you yet.</p></div>
         ) : (
-          <div className="agd__table-wrap">
-            <table className="agd__table">
-              <thead>
-                <tr>
-                  <th>Title</th><th>Status</th><th>Priority</th>
-                  <th>Category</th><th>Created By</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredTickets.map(ticket => {
-                  const sm = getStatusMeta(ticket.status);
-                  const pm = getPriorityMeta(ticket.priority);
-                  return (
-                    <tr key={ticket.id} className="agd__row">
-                      <td className="agd__cell-title">{ticket.title}</td>
-                      <td><span className={`agd__badge agd__badge--status ${sm.cls}`}>{sm.label}</span></td>
-                      <td><span className={`agd__badge agd__badge--priority ${pm.cls}`}>{pm.label}</span></td>
-                      <td className="agd__cell-cat">{ticket.category}</td>
-                      <td className="agd__cell-creator">{ticket.createdByName}</td>
-                      <td className="agd__cell-actions">
-                        <button className="agd__btn-action agd__btn-chat" onClick={() => openChatModal(ticket)} title="Chat">
-                          <IconMessageCircle />
-                        </button>
-                        <button className="agd__btn-action agd__btn-details" onClick={() => openDetailsModal(ticket)} title="Details">
-                          <IconFileText />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="agd__table-wrap">
+              <table className="agd__table">
+                <thead>
+                  <tr>
+                    <th>Title</th><th>Status</th><th>Priority</th>
+                    <th>Category</th><th>Created By</th><th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedTickets.map(ticket => {
+                    const sm = getStatusMeta(ticket.status);
+                    const pm = getPriorityMeta(ticket.priority);
+                    return (
+                      <tr key={ticket.id} className="agd__row">
+                        <td className="agd__cell-title">{ticket.title}</td>
+                        <td><span className={`agd__badge agd__badge--status ${sm.cls}`}>{sm.label}</span></td>
+                        <td><span className={`agd__badge agd__badge--priority ${pm.cls}`}>{pm.label}</span></td>
+                        <td className="agd__cell-cat">{ticket.category}</td>
+                        <td className="agd__cell-creator">{ticket.createdByName}</td>
+                        <td className="agd__cell-actions">
+                          <button className="agd__btn-action agd__btn-chat" onClick={() => openChatModal(ticket)} title="Chat">
+                            <IconMessageCircle />
+                          </button>
+                          <button className="agd__btn-action agd__btn-details" onClick={() => openDetailsModal(ticket)} title="Details">
+                            <IconFileText />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Pagination ── */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            />
+          </>
         )}
       </section>
 
-      {/* ✅ Details Modal ── */}
+      {/* ── Details Modal ── */}
       {showDetailsModal && selectedTicket && (
         <div className="agd__overlay" onClick={closeDetailsModal}>
           <div className="agd__modal" onClick={e => e.stopPropagation()}>
@@ -308,11 +333,7 @@ const AgentDashboard = ({ user }) => {
                 <div className="agd__detail-cell">
                   <label>Status</label>
                   <div className="agd__select-wrap">
-                    <select 
-                      value={updateForm.status} 
-                      onChange={e => setUpdateForm({ ...updateForm, status: e.target.value })}
-                      disabled={saving}
-                    >
+                    <select value={updateForm.status} onChange={e => setUpdateForm({ ...updateForm, status: e.target.value })} disabled={saving}>
                       <option value="OPEN">Open</option>
                       <option value="IN_PROGRESS">In Progress</option>
                       <option value="RESOLVED">Resolved</option>
@@ -323,11 +344,7 @@ const AgentDashboard = ({ user }) => {
                 <div className="agd__detail-cell">
                   <label>Priority</label>
                   <div className="agd__select-wrap">
-                    <select 
-                      value={updateForm.priority} 
-                      onChange={e => setUpdateForm({ ...updateForm, priority: e.target.value })}
-                      disabled={saving}
-                    >
+                    <select value={updateForm.priority} onChange={e => setUpdateForm({ ...updateForm, priority: e.target.value })} disabled={saving}>
                       <option value="LOW">Low</option>
                       <option value="MEDIUM">Medium</option>
                       <option value="HIGH">High</option>
@@ -359,18 +376,8 @@ const AgentDashboard = ({ user }) => {
               )}
 
               <div className="agd__form-actions">
-                <button 
-                  className="agd__btn-secondary" 
-                  onClick={closeDetailsModal}
-                  disabled={saving}
-                >
-                  Close
-                </button>
-                <button 
-                  className="agd__btn-primary" 
-                  onClick={handleUpdateTicket} 
-                  disabled={saving || saveSuccess}
-                >
+                <button className="agd__btn-secondary" onClick={closeDetailsModal} disabled={saving}>Close</button>
+                <button className="agd__btn-primary" onClick={handleUpdateTicket} disabled={saving || saveSuccess}>
                   {saveSuccess ? '✓ Saved!' : saving ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
@@ -379,7 +386,7 @@ const AgentDashboard = ({ user }) => {
         </div>
       )}
 
-      {/* ✅ Chat Modal ── */}
+      {/* ── Chat Modal ── */}
       {showChatModal && selectedTicket && (
         <div className="agd__overlay" onClick={closeChatModal}>
           <div className="agd__modal agd__modal--comms" onClick={e => e.stopPropagation()}>

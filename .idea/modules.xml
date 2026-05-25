@@ -3,6 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/backend.iml" filepath="$PROJECT_DIR$/.idea/backend.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.iml" filepath="$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.main.iml" filepath="$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.test.iml" filepath="$PROJECT_DIR$/.idea/modules/org.example.ticketing-system.test.iml" />
     </modules>
   </component>
 </project>

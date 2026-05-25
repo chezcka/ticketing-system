@@ -10,7 +10,11 @@
   flex-direction: column;
   gap: 24px;
   min-width: 0;
-  padding: 0 20px;
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 36px 28px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ── Header ───────────────────────────────────────────────────────────────── */
@@ -642,9 +646,11 @@
 
 .ad__modal-head h2 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
-  color: #101828;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.2;
+  word-break: break-word;
 }
 
 .ad__modal-sub {
@@ -857,6 +863,44 @@
 .ad__btn-primary:hover {
   background: #c95e00;
   box-shadow: 0 4px 14px rgba(234, 108, 0, 0.35);
+}
+
+/* ── Agent name text (prevents clipping) ─────────────────────────────────── */
+.ad__agent-name {
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* ── Icon-only manage button ──────────────────────────────────────────────── */
+.ad__btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e4e7ec;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 150ms ease;
+  padding: 0;
+}
+
+.ad__btn-icon:hover {
+  background: #ea6c00;
+  border-color: #ea6c00;
+  color: white;
+}
+
+.ad__cell-action {
+  width: 40px;
+  text-align: center;
 }
 
 /* ── Responsive ───────────────────────────────────────────────────────────── */

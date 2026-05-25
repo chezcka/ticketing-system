@@ -43,40 +43,90 @@ public class CommentService {
     // ── Add comment ───────────────────────────────────────────────────────────
 
     public CommentResponse addComment(Long ticketId, Long userId, CommentCreateRequest request) {
+        log.info("🔵 === CommentService.addComment() START ===");
+        log.info("   ticketId: {}", ticketId);
+        log.info("   userId: {}", userId);
+        log.info("   content: '{}'", request.getContent());
+        log.info("   isInternal: {}", request.getIsInternal());
 
+        // Validate ticket exists
+        log.info("1️⃣ Checking if ticket {} exists...", ticketId);
         Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+                .orElseThrow(() -> {
+                    log.error("❌ Ticket {} not found!", ticketId);
+                    return new IllegalArgumentException("Ticket not found");
+                });
+        log.info("✅ Ticket found: {}", ticket.getTitle());
 
+        // Validate user exists
+        log.info("2️⃣ Checking if user {} exists...", userId);
         User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+                .orElseThrow(() -> {
+                    log.error("❌ User {} not found!", userId);
+                    return new IllegalArgumentException("User not found");
+                });
+        log.info("✅ User found: {}", user.getFullName());
 
+        // Validate content
+        log.info("3️⃣ Validating comment content...");
         if (request.getContent() == null || request.getContent().isBlank()) {
+            log.error("❌ Comment content is empty or null!");
             throw new IllegalArgumentException("Comment content cannot be empty");
         }
+        log.info("✅ Content is valid");
 
-        // Build comment
+        // Build comment object
+        log.info("4️⃣ Creating comment object...");
         Comment comment = new Comment();
         comment.setTicketId(ticketId);
         comment.setUserId(userId);
         comment.setContent(request.getContent());
         comment.setIsInternal(request.getIsInternal() != null ? request.getIsInternal() : false);
+        log.info("✅ Comment object created");
 
+        // Save to database
+        log.info("5️⃣ SAVING comment to database...");
         Comment saved = commentRepository.save(comment);
-        log.info("Comment added to ticket {}: {}", ticketId, saved.getId());
+        log.info("   Saved with ID: {}", saved.getId());
 
-        // Build response DTO (used for both WS push and return value)
+        // ✅ CRITICAL FIX: Flush to force immediate write to database
+        try {
+            commentRepository.flush();
+            log.info("✅✅✅ FLUSHED TO DATABASE ✅✅✅");
+        } catch (Exception e) {
+            log.error("❌ FLUSH FAILED: {}", e.getMessage());
+            throw new RuntimeException("Failed to persist comment to database", e);
+        }
+
+        log.info("   Saved comment ID: {}", saved.getId());
+        log.info("   Saved comment createdAt: {}", saved.getCreatedAt());
+        log.info("   Saved comment ticketId: {}", saved.getTicketId());
+        log.info("   Saved comment userId: {}", saved.getUserId());
+
+        // Build response DTO
+        log.info("6️⃣ Converting to CommentResponse...");
         CommentResponse response = convertToResponse(saved);
+        log.info("✅ Response created");
 
-        // ── 1. WebSocket push — real-time update to all subscribers ──────────
-        // Frontend hook listens on /topic/ticket/{id}
-        // Clients automatically ignore isInternal=true via the hook filter
-        messagingTemplate.convertAndSend("/topic/ticket/" + ticketId, response);
-        log.debug("WebSocket push sent to /topic/ticket/{}", ticketId);
+        // WebSocket push
+        log.info("7️⃣ Sending WebSocket push to /topic/ticket/{}...", ticketId);
+        try {
+            messagingTemplate.convertAndSend("/topic/ticket/" + ticketId, response);
+            log.info("✅ WebSocket push sent");
+        } catch (Exception e) {
+            log.warn("⚠️ WebSocket push failed (non-critical): {}", e.getMessage());
+        }
 
-        // ── 2. Email notification (async, non-blocking) ───────────────────────
-        notificationService.notifyNewComment(ticket, saved, user);
-        log.debug("Notification triggered for comment {} on ticket {}", saved.getId(), ticketId);
+        // Email notification
+        log.info("8️⃣ Triggering email notification...");
+        try {
+            notificationService.notifyNewComment(ticket, saved, user);
+            log.info("✅ Notification triggered");
+        } catch (Exception e) {
+            log.warn("⚠️ Notification failed (non-critical): {}", e.getMessage());
+        }
 
+        log.info("🟢 === CommentService.addComment() SUCCESS ===");
         return response;
     }
 
@@ -84,43 +134,91 @@ public class CommentService {
 
     @Transactional(readOnly = true)
     public List<CommentResponse> getTicketComments(Long ticketId) {
-        ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
+        log.info("📥 === CommentService.getTicketComments() START ===");
+        log.info("   ticketId: {}", ticketId);
 
-        return commentRepository.findByTicketId(ticketId).stream()
+        // Validate ticket exists
+        log.info("1️⃣ Checking if ticket {} exists...", ticketId);
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> {
+                    log.error("❌ Ticket {} not found!", ticketId);
+                    return new IllegalArgumentException("Ticket not found");
+                });
+        log.info("✅ Ticket found");
+
+        // Fetch comments
+        log.info("2️⃣ Querying comments from database for ticket {}...", ticketId);
+        List<Comment> comments = commentRepository.findByTicketId(ticketId);
+        log.info("✅ Query returned {} comments", comments.size());
+
+        if (comments.isEmpty()) {
+            log.warn("⚠️ No comments found for ticket {}", ticketId);
+        }
+
+        // Convert to responses
+        log.info("3️⃣ Converting {} comments to response objects...", comments.size());
+        List<CommentResponse> responses = comments.stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
+        log.info("✅ Converted to {} response objects", responses.size());
+
+        log.info("🟢 === CommentService.getTicketComments() SUCCESS ===");
+        return responses;
     }
 
     // ── Get comments for a ticket — client view (no internal notes) ───────────
 
     @Transactional(readOnly = true)
     public List<CommentResponse> getTicketCommentsForClient(Long ticketId) {
+        log.info("📥 === CommentService.getTicketCommentsForClient() START ===");
+        log.info("   ticketId: {}", ticketId);
+
         ticketRepository.findById(ticketId)
                 .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
 
-        return commentRepository.findByTicketId(ticketId).stream()
+        List<CommentResponse> responses = commentRepository.findByTicketId(ticketId).stream()
                 .filter(c -> !Boolean.TRUE.equals(c.getIsInternal()))
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
+
+        log.info("✅ Returned {} public comments (filtered out internal)", responses.size());
+        return responses;
     }
 
     // ── Get single comment ────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public CommentResponse getComment(Long id) {
+        log.info("📥 === CommentService.getComment() START ===");
+        log.info("   commentId: {}", id);
+
         Comment comment = commentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
-        return convertToResponse(comment);
+                .orElseThrow(() -> {
+                    log.error("❌ Comment {} not found!", id);
+                    return new IllegalArgumentException("Comment not found");
+                });
+
+        CommentResponse response = convertToResponse(comment);
+        log.info("✅ Comment retrieved: {}", comment.getId());
+        return response;
     }
 
     // ── Update comment ────────────────────────────────────────────────────────
 
     public CommentResponse updateComment(Long id, Long userId, CommentCreateRequest request) {
+        log.info("📝 === CommentService.updateComment() START ===");
+        log.info("   commentId: {}", id);
+        log.info("   userId: {}", userId);
+
         Comment comment = commentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
+                .orElseThrow(() -> {
+                    log.error("❌ Comment {} not found!", id);
+                    return new IllegalArgumentException("Comment not found");
+                });
 
         if (!comment.getUserId().equals(userId)) {
+            log.error("❌ User {} not authorized to edit comment {} (owner is {})",
+                    userId, id, comment.getUserId());
             throw new IllegalArgumentException("You can only edit your own comments");
         }
 
@@ -129,31 +227,48 @@ public class CommentService {
         }
 
         Comment updated = commentRepository.save(comment);
-        log.info("Comment {} updated", id);
+        commentRepository.flush();
+        log.info("✅ Comment {} updated", id);
         return convertToResponse(updated);
     }
 
     // ── Delete comment ────────────────────────────────────────────────────────
 
     public void deleteComment(Long id, Long userId) {
+        log.info("🗑️ === CommentService.deleteComment() START ===");
+        log.info("   commentId: {}", id);
+        log.info("   userId: {}", userId);
+
         Comment comment = commentRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
+                .orElseThrow(() -> {
+                    log.error("❌ Comment {} not found!", id);
+                    return new IllegalArgumentException("Comment not found");
+                });
 
         if (!comment.getUserId().equals(userId)) {
+            log.error("❌ User {} not authorized to delete comment {} (owner is {})",
+                    userId, id, comment.getUserId());
             throw new IllegalArgumentException("You can only delete your own comments");
         }
 
         commentRepository.delete(comment);
-        log.info("Comment {} deleted", id);
+        commentRepository.flush();
+        log.info("✅ Comment {} deleted", id);
     }
 
     // ── Get all comments by a user ────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<CommentResponse> getUserComments(Long userId) {
-        return commentRepository.findByUserId(userId).stream()
+        log.info("📥 === CommentService.getUserComments() START ===");
+        log.info("   userId: {}", userId);
+
+        List<CommentResponse> responses = commentRepository.findByUserId(userId).stream()
                 .map(this::convertToResponse)
                 .collect(Collectors.toList());
+
+        log.info("✅ Retrieved {} comments by user {}", responses.size(), userId);
+        return responses;
     }
 
     // ── Mapping ───────────────────────────────────────────────────────────────
@@ -170,8 +285,6 @@ public class CommentService {
 
         userRepository.findById(comment.getUserId()).ifPresent(user -> {
             response.setUserName(user.getFullName());
-            // authorRole lets the frontend know if the bubble came from an agent or a client
-            // Adjust getRoleAsString() to match however your User model exposes the role
             if (user.getRole() != null) {
                 response.setAuthorRole(user.getRole().name());
             }

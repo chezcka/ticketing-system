@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.ticketingsystem.dto.*;
 import org.example.ticketingsystem.model.User;
 import org.example.ticketingsystem.model.UserRole;
+import org.example.ticketingsystem.model.UserStatus;
 import org.example.ticketingsystem.repository.UserRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,19 +33,17 @@ public class UserService {
     public UserResponse registerUser(UserRegisterRequest request) {
         log.info("Registering new user with email: {}", request.getEmail());
 
-        // Check if user already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             log.warn("User with email {} already exists", request.getEmail());
             throw new IllegalArgumentException("User with this email already exists");
         }
 
-        // Create new user
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
         user.setRole(UserRole.CLIENT);
-        user.setActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         user.setIsDeleted(false);
 
         User savedUser = userRepository.save(user);
@@ -59,19 +58,17 @@ public class UserService {
     public User registerUserReturnEntity(UserRegisterRequest request) {
         log.info("Registering new user with email: {}", request.getEmail());
 
-        // Check if user already exists
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             log.warn("User with email {} already exists", request.getEmail());
             throw new IllegalArgumentException("User with this email already exists");
         }
 
-        // Create new user
         User user = new User();
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setFullName(request.getFullName());
         user.setRole(UserRole.CLIENT);
-        user.setActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         user.setIsDeleted(false);
 
         User savedUser = userRepository.save(user);
@@ -81,7 +78,7 @@ public class UserService {
     }
 
     /**
-     * Login user and return authentication response - returns LoginResponse (for old code)
+     * Login user and return authentication response
      */
     public LoginResponse loginUser(UserLoginRequest request) {
         log.info("Attempting login for user: {}", request.getEmail());
@@ -92,13 +89,11 @@ public class UserService {
                     return new IllegalArgumentException("Invalid email or password");
                 });
 
-        // Check if user is active and not deleted
-        if (!user.getActive() || user.getIsDeleted()) {
+        if (user.getStatus() != UserStatus.ACTIVE || user.getIsDeleted()) {
             log.warn("User account is inactive or deleted: {}", request.getEmail());
             throw new IllegalArgumentException("User account is inactive");
         }
 
-        // Verify password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("Invalid password for user: {}", request.getEmail());
             throw new IllegalArgumentException("Invalid email or password");
@@ -128,13 +123,11 @@ public class UserService {
                     return new IllegalArgumentException("Invalid email or password");
                 });
 
-        // Check if user is active and not deleted
-        if (!user.getActive() || user.getIsDeleted()) {
+        if (user.getStatus() != UserStatus.ACTIVE || user.getIsDeleted()) {
             log.warn("User account is inactive or deleted: {}", request.getEmail());
             throw new IllegalArgumentException("User account is inactive");
         }
 
-        // Verify password
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             log.warn("Invalid password for user: {}", request.getEmail());
             throw new IllegalArgumentException("Invalid email or password");
@@ -176,8 +169,12 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        if (request.getFullName() != null && !request.getFullName().isEmpty()) {
-            user.setFullName(request.getFullName());
+        if (request.getFirstName() != null && !request.getFirstName().isEmpty()) {
+            user.setFullName(request.getFirstName() + " " + request.getLastName());
+        }
+
+        if (request.getLastName() != null && !request.getLastName().isEmpty()) {
+            user.setFullName(request.getFirstName() + " " + request.getLastName());
         }
 
         if (request.getPhone() != null) {
@@ -186,6 +183,17 @@ public class UserService {
 
         if (request.getDepartment() != null) {
             user.setDepartment(request.getDepartment());
+        }
+
+        if (request.getStatus() != null && !request.getStatus().isEmpty()) {
+            try {
+                UserStatus newStatus = UserStatus.valueOf(request.getStatus());
+                user.setStatus(newStatus);
+                log.info("User {} status changed to {}", id, newStatus);
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid status: {}", request.getStatus());
+                throw new IllegalArgumentException("Invalid status. Must be ACTIVE, INACTIVE, or SUSPENDED");
+            }
         }
 
         if (request.getNotificationPreferences() != null) {
@@ -203,6 +211,38 @@ public class UserService {
     }
 
     /**
+     * Deactivate user - sets status to INACTIVE
+     */
+    public UserResponse deactivateUser(Long id) {
+        log.info("Deactivating user with id: {}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        user.setStatus(UserStatus.INACTIVE);
+        User updatedUser = userRepository.save(user);
+        log.info("User deactivated successfully with id: {}", id);
+
+        return mapToUserResponse(updatedUser);
+    }
+
+    /**
+     * Reactivate user - sets status back to ACTIVE
+     */
+    public UserResponse reactivateUser(Long id) {
+        log.info("Reactivating user with id: {}", id);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        user.setStatus(UserStatus.ACTIVE);
+        User updatedUser = userRepository.save(user);
+        log.info("User reactivated successfully with id: {}", id);
+
+        return mapToUserResponse(updatedUser);
+    }
+
+    /**
      * Soft delete user (mark as deleted)
      */
     public void softDeleteUser(Long id) {
@@ -212,6 +252,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         user.setIsDeleted(true);
+        user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
         log.info("User soft deleted successfully with id: {}", id);
     }
@@ -226,6 +267,7 @@ public class UserService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
         user.setIsDeleted(false);
+        user.setStatus(UserStatus.ACTIVE);
         User restoredUser = userRepository.save(user);
         log.info("User restored successfully with id: {}", id);
 
@@ -242,8 +284,8 @@ public class UserService {
         response.setFullName(user.getFullName());
         response.setPhone(user.getPhone());
         response.setDepartment(user.getDepartment());
-        response.setRole(user.getRole().toString());
-        response.setActive(user.getActive());
+        response.setRole(user.getRole() != null ? user.getRole().toString() : "CLIENT");
+        response.setStatus(user.getStatus() != null ? user.getStatus().toString() : "ACTIVE");
         response.setNotificationPreferences(user.getNotificationPreferences());
         return response;
     }
@@ -272,22 +314,28 @@ public class UserService {
      * Register support agent
      */
     public UserResponse registerSupportAgent(UserRegisterRequest request) {
-
         log.info("Registering support agent with email: {}", request.getEmail());
 
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new IllegalArgumentException("User with this email already exists");
         }
 
+        // Guarantee password is never null before encoding
+        String rawPassword = (request.getPassword() != null && !request.getPassword().isEmpty())
+                ? request.getPassword()
+                : "Agent@123456";
+
         User user = new User();
         user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPassword(passwordEncoder.encode(rawPassword));
         user.setFullName(request.getFullName());
+        user.setDepartment(request.getDepartment());
         user.setRole(UserRole.SUPPORT_AGENT);
-        user.setActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         user.setIsDeleted(false);
 
         User savedUser = userRepository.save(user);
+        log.info("Support agent registered successfully with id: {}", savedUser.getId());
 
         return mapToUserResponse(savedUser);
     }

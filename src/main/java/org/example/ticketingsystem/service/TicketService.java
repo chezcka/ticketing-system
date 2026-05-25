@@ -244,7 +244,6 @@ public class TicketService {
         );
     }
 
-    /** Convert Ticket entity to TicketResponse DTO **/
     private TicketResponse convertToResponse(Ticket ticket) {
         TicketResponse response = new TicketResponse();
         response.setId(ticket.getId());
@@ -253,22 +252,33 @@ public class TicketService {
         response.setStatus(ticket.getStatus().toString());
         response.setPriority(ticket.getPriority().toString());
         response.setCategory(ticket.getCategory());
-        response.setCreatedBy(ticket.getCreatedBy());
-        response.setAssignedTo(ticket.getAssignedTo());
         response.setCreatedAt(ticket.getCreatedAt());
         response.setUpdatedAt(ticket.getUpdatedAt());
         response.setResolvedAt(ticket.getResolvedAt());
 
-        // Get creator name
-        userRepository.findById(ticket.getCreatedBy()).ifPresent(user ->
-                response.setCreatedByName(user.getFullName())
-        );
 
-        // Get assignee name
-        if (ticket.getAssignedTo() != null) {
-            userRepository.findById(ticket.getAssignedTo()).ifPresent(user ->
-                    response.setAssignedToName(user.getFullName())
+        response.setCreatedBy(ticket.getCreatedBy());
+
+        // Get creator name for display
+        if (ticket.getCreatedBy() != null) {
+            userRepository.findById(ticket.getCreatedBy()).ifPresent(user ->
+                    response.setCreatedByName(user.getFullName())
             );
+        }
+
+        if (ticket.getAssignedTo() != null) {
+            UserResponse assignedToResponse = new UserResponse();
+            userRepository.findById(ticket.getAssignedTo()).ifPresent(user -> {
+                assignedToResponse.setId(user.getId());
+                assignedToResponse.setEmail(user.getEmail());
+                assignedToResponse.setFullName(user.getFullName());
+                // Don't set firstName/lastName as UserResponse doesn't have them
+                assignedToResponse.setPhone(user.getPhone());
+                assignedToResponse.setDepartment(user.getDepartment());
+                assignedToResponse.setRole(user.getRole().toString());
+                assignedToResponse.setStatus(user.getStatus().toString());
+                response.setAssignedTo(assignedToResponse);
+            });
         }
 
         // Get comment count

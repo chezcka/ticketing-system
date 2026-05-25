@@ -8,6 +8,7 @@ import {
   calculateResolutionRate,
   calculateOpenPercentage,
 } from '../../utils/analyticsUtils';
+import Pagination from '../Common/Pagination';
 import './AdminDashboard.css';
 
 // ─── Service functions ─────────────────────────────────────────────────────
@@ -48,12 +49,6 @@ const IconResolved = () => (
   </svg>
 );
 
-const IconPlus = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M12 5v14M5 12h14"/>
-  </svg>
-);
-
 const IconClose = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 6 6 18M6 6l12 12"/>
@@ -72,9 +67,10 @@ const IconFilter = () => (
   </svg>
 );
 
-const IconManage = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const IconEdit = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+    <path d="m15 5 4 4"/>
   </svg>
 );
 
@@ -117,36 +113,77 @@ const IconTarget = () => (
   </svg>
 );
 
+// ─── Resolve agent name — handles object, plain ID, or name string ─────────
+
+const resolveAgentName = (ticket, agents = []) => {
+  const assignedTo = ticket.assignedTo;
+
+  // 1. Prefer dedicated name field if backend sends it as a flat string
+  if (ticket.assignedToName && typeof ticket.assignedToName === 'string' && ticket.assignedToName.trim()) {
+    return ticket.assignedToName.trim();
+  }
+
+  // 2. assignedTo is a user object (same shape ClientDashboard receives)
+  if (assignedTo && typeof assignedTo === 'object') {
+    if (assignedTo.fullName && assignedTo.fullName.trim()) return assignedTo.fullName.trim();
+    const parts = [assignedTo.firstName, assignedTo.lastName].filter(Boolean);
+    if (parts.length) return parts.join(' ');
+    // object exists but has no readable name — fall through to agents list
+    const objectId = assignedTo.id ?? assignedTo.agentId;
+    if (objectId) {
+      const found = agents.find(a => String(a.agentId) === String(objectId));
+      if (found) return found.agentName;
+    }
+    return null;
+  }
+
+  // 3. assignedTo is a plain primitive ID — look up in agents workload list
+  if (assignedTo) {
+    const found = agents.find(a => String(a.agentId) === String(assignedTo));
+    if (found) return found.agentName;
+    return null; // avoid rendering "[object Object]" or raw UUIDs
+  }
+
+  return null;
+};
+
+// ─── Check whether a ticket is truly unassigned ───────────────────────────
+
+const isTicketUnassigned = (ticket) => {
+  const a = ticket.assignedTo;
+  if (!a) return true;
+  if (typeof a === 'object') return !a.id && !a.agentId;
+  return false;
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
+
+const ADMIN_PAGE_SIZE = 10;
 
 const AdminDashboard = ({ user }) => {
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [agents, setAgents] = useState([]);
-  // ✅ REAL-TIME ANALYTICS STATE
   const [analytics, setAnalytics] = useState({
     avgResolutionTime: 0,
     satisfactionScore: 0,
     agentUtilization: 0,
     avgFirstResponseTime: 0,
   });
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: 'General',
-    priority: 'MEDIUM',
-  });
   const [updateForm, setUpdateForm] = useState({
     status: '',
     priority: '',
     assignedTo: '',
   });
+
+  // ── Pagination state ──
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(ADMIN_PAGE_SIZE);
 
   useEffect(() => {
     fetchTickets();
@@ -158,6 +195,7 @@ const AdminDashboard = ({ user }) => {
     if (statusFilter !== 'all') filtered = filtered.filter(t => t.status === statusFilter);
     if (priorityFilter !== 'all') filtered = filtered.filter(t => t.priority === priorityFilter);
     setFilteredTickets(filtered);
+    setCurrentPage(1);
   }, [tickets, statusFilter, priorityFilter]);
 
   const fetchTickets = async () => {
@@ -173,8 +211,6 @@ const AdminDashboard = ({ user }) => {
         ticketArray = response;
       }
       setTickets(ticketArray);
-      
-      // ✅ CALCULATE REAL ANALYTICS
       setAnalytics({
         avgResolutionTime: calculateAvgResolutionTime(ticketArray),
         satisfactionScore: calculateSatisfactionScore(ticketArray),
@@ -200,25 +236,9 @@ const AdminDashboard = ({ user }) => {
     }
   };
 
-  const handleCreateTicket = async (e) => {
-    e.preventDefault();
-    try {
-      await createTicket(formData);
-      setFormData({ title: '', description: '', category: 'General', priority: 'MEDIUM' });
-      setShowCreateModal(false);
-      await fetchTickets();
-    } catch (error) {
-      console.error('Error creating ticket:', error);
-    }
-  };
-
   const handleUpdateTicket = async () => {
     if (!selectedTicket) return;
     try {
-      await updateTicket(selectedTicket.id, {
-        status: updateForm.status || selectedTicket.status,
-        priority: updateForm.priority || selectedTicket.priority,
-      });
       if (updateForm.assignedTo && updateForm.assignedTo !== selectedTicket.assignedTo) {
         await assignTicketToAgent(selectedTicket.id, updateForm.assignedTo);
       }
@@ -231,14 +251,17 @@ const AdminDashboard = ({ user }) => {
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
   const openTicketDetail = (ticket) => {
     setSelectedTicket(ticket);
-    setUpdateForm({ status: ticket.status, priority: ticket.priority, assignedTo: ticket.assignedTo || '' });
+    // Resolve the current assignedTo ID to pre-select in the dropdown
+    const a = ticket.assignedTo;
+    let currentAgentId = '';
+    if (a && typeof a === 'object') {
+      currentAgentId = String(a.id ?? a.agentId ?? '');
+    } else if (a) {
+      currentAgentId = String(a);
+    }
+    setUpdateForm({ status: '', priority: '', assignedTo: currentAgentId });
     setShowDetailModal(true);
   };
 
@@ -253,21 +276,30 @@ const AdminDashboard = ({ user }) => {
 
   const getPriorityMeta = (priority) => {
     switch (priority) {
-      case 'HIGH':   return { cls: 'priority--high',   label: 'High' };
-      case 'MEDIUM': return { cls: 'priority--medium', label: 'Medium' };
-      case 'LOW':    return { cls: 'priority--low',    label: 'Low' };
-      default:       return { cls: 'priority--default', label: priority };
+      case 'HIGH':     return { cls: 'priority--high',    label: 'High' };
+      case 'MEDIUM':   return { cls: 'priority--medium',  label: 'Medium' };
+      case 'LOW':      return { cls: 'priority--low',     label: 'Low' };
+      case 'CRITICAL': return { cls: 'priority--high',    label: 'Critical' };
+      default:         return { cls: 'priority--default', label: priority };
     }
   };
 
-  const unassignedCount = tickets.filter(t => !t.assignedTo).length;
+  const unassignedCount = tickets.filter(t => isTicketUnassigned(t)).length;
 
   const stats = [
-    { key: 'total',    label: 'Total Tickets', value: tickets.length,                                     icon: <IconTickets />, mod: 'stat--total' },
-    { key: 'open',     label: 'Open',          value: tickets.filter(t => t.status === 'OPEN').length,    icon: <IconOpen />,    mod: 'stat--open' },
-    { key: 'assigned', label: 'Assigned',      value: tickets.filter(t => t.assignedTo).length,           icon: <IconAssigned />,mod: 'stat--assigned' },
-    { key: 'resolved', label: 'Resolved',      value: tickets.filter(t => t.status === 'RESOLVED').length,icon: <IconResolved />,mod: 'stat--resolved' },
+    { key: 'total',    label: 'Total Tickets', value: tickets.length,                                      icon: <IconTickets />, mod: 'stat--total' },
+    { key: 'open',     label: 'Open',          value: tickets.filter(t => t.status === 'OPEN').length,     icon: <IconOpen />,    mod: 'stat--open' },
+    { key: 'assigned', label: 'Assigned',      value: tickets.filter(t => !isTicketUnassigned(t)).length,  icon: <IconAssigned />,mod: 'stat--assigned' },
+    { key: 'resolved', label: 'Resolved',      value: tickets.filter(t => t.status === 'RESOLVED').length, icon: <IconResolved />,mod: 'stat--resolved' },
   ];
+
+  // ── Paginated slice (newest first) ──
+  const reversedFiltered = [...filteredTickets].reverse();
+  const totalItems = reversedFiltered.length;
+  const pagedTickets = reversedFiltered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className="ad">
@@ -278,10 +310,6 @@ const AdminDashboard = ({ user }) => {
           <h1 className="ad__title">Admin Dashboard</h1>
           <p className="ad__subtitle">Full system control &amp; monitoring</p>
         </div>
-        <button className="ad__btn-create" onClick={() => setShowCreateModal(true)}>
-          <IconPlus />
-          New Ticket
-        </button>
       </header>
 
       {/* ── Unassigned Alert ── */}
@@ -290,23 +318,19 @@ const AdminDashboard = ({ user }) => {
           <IconAlertCircle />
           <span>
             <strong>{unassignedCount} unassigned ticket{unassignedCount !== 1 ? 's' : ''}</strong>
-            {' '}— click Manage to assign to an agent.
+            {' '}— click the edit button to assign to an agent.
           </span>
         </div>
       )}
 
-      {/* ── Analytics Section (WITH REAL DATA) ── */}
+      {/* ── Analytics Section ── */}
       <section className="ad__panel ad__panel--analytics">
         <div className="ad__panel-head">
           <h2 className="ad__panel-title">System Analytics</h2>
         </div>
-
         <div className="ad__analytics-grid">
-          {/* Average Resolution Time (REAL) */}
           <div className="ad__analytics-card">
-            <div className="ad__analytics-icon ad__analytics-icon--time">
-              <IconClock />
-            </div>
+            <div className="ad__analytics-icon ad__analytics-icon--time"><IconClock /></div>
             <div className="ad__analytics-body">
               <span className="ad__analytics-label">Avg. Resolution Time</span>
               <span className="ad__analytics-value">
@@ -317,58 +341,42 @@ const AdminDashboard = ({ user }) => {
               </span>
             </div>
           </div>
-
-          {/* Customer Satisfaction (REAL) */}
           <div className="ad__analytics-card">
-            <div className="ad__analytics-icon ad__analytics-icon--satisfaction">
-              <IconTarget />
-            </div>
+            <div className="ad__analytics-icon ad__analytics-icon--satisfaction"><IconTarget /></div>
             <div className="ad__analytics-body">
               <span className="ad__analytics-label">Customer Satisfaction</span>
-              <span className="ad__analytics-value">
-                {analytics.satisfactionScore}%
-              </span>
+              <span className="ad__analytics-value">{analytics.satisfactionScore}%</span>
               <span className="ad__analytics-trend ad__analytics-trend--up">
                 <IconTrendingUp /> Resolution-based
               </span>
             </div>
           </div>
-
-          {/* Agent Utilization (REAL) */}
           <div className="ad__analytics-card">
-            <div className="ad__analytics-icon ad__analytics-icon--agents">
-              <IconUsers />
-            </div>
+            <div className="ad__analytics-icon ad__analytics-icon--agents"><IconUsers /></div>
             <div className="ad__analytics-body">
               <span className="ad__analytics-label">Agent Utilization</span>
-              <span className="ad__analytics-value">
-                {analytics.agentUtilization}%
-              </span>
+              <span className="ad__analytics-value">{analytics.agentUtilization}%</span>
               <span className="ad__analytics-trend ad__analytics-trend--neutral">
                 <span className="ad__trend-dot"></span> {agents.length} agents active
               </span>
             </div>
           </div>
-
-          {/* First Response Time (REAL) */}
           <div className="ad__analytics-card">
-            <div className="ad__analytics-icon ad__analytics-icon--response">
-              <IconClock />
-            </div>
+            <div className="ad__analytics-icon ad__analytics-icon--response"><IconClock /></div>
             <div className="ad__analytics-body">
               <span className="ad__analytics-label">Avg. First Response</span>
               <span className="ad__analytics-value">
                 {analytics.avgFirstResponseTime === 0 ? '—' : `${analytics.avgFirstResponseTime} min`}
               </span>
               <span className="ad__analytics-trend ad__analytics-trend--up">
-                <IconTrendingUp /> {tickets.filter(t => t.assignedTo).length} assigned
+                <IconTrendingUp /> {tickets.filter(t => !isTicketUnassigned(t)).length} assigned
               </span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Stats Row (Overview) ── */}
+      {/* ── Stats Row ── */}
       <section className="ad__stats">
         {stats.map(s => (
           <div key={s.key} className={`ad__stat ${s.mod}`}>
@@ -423,113 +431,74 @@ const AdminDashboard = ({ user }) => {
             <p>No tickets match the current filters.</p>
           </div>
         ) : (
-          <div className="ad__table-wrap">
-            <table className="ad__table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Status</th>
-                  <th>Priority</th>
-                  <th>Assigned To</th>
-                  <th>Created</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* ✅ REVERSE ORDER: Newest tickets appear FIRST */}
-                {[...filteredTickets].reverse().map(ticket => {
-                  const sm = getStatusMeta(ticket.status);
-                  const pm = getPriorityMeta(ticket.priority);
-                  const isUnassigned = !ticket.assignedTo;
-                  return (
-                    <tr key={ticket.id} className={`ad__row ${isUnassigned ? 'ad__row--unassigned' : ''}`}>
-                      <td className="ad__cell-id">#{ticket.id}</td>
-                      <td className="ad__cell-title">{ticket.title}</td>
-                      <td><span className={`ad__badge ad__badge--status ${sm.cls}`}>{sm.label}</span></td>
-                      <td><span className={`ad__badge ad__badge--priority ${pm.cls}`}>{pm.label}</span></td>
-                      <td className="ad__cell-agent">
-                        {isUnassigned ? (
-                          <span className="ad__badge ad__badge--unassigned">Unassigned</span>
-                        ) : (
-                          <span className="ad__agent-cell">
-                            <span className="ad__agent-avatar">{ticket.assignedToName?.[0]}</span>
-                            {ticket.assignedToName}
-                          </span>
-                        )}
-                      </td>
-                      <td className="ad__cell-date">
-                        {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                      <td>
-                        <button className="ad__btn-manage" onClick={() => openTicketDetail(ticket)}>
-                          <IconManage />
-                          Manage
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="ad__table-wrap">
+              <table className="ad__table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Status</th>
+                    <th>Priority</th>
+                    <th>Assigned To</th>
+                    <th>Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedTickets.map(ticket => {
+                    const sm         = getStatusMeta(ticket.status);
+                    const pm         = getPriorityMeta(ticket.priority);
+                    const unassigned = isTicketUnassigned(ticket);
+                    const agentName  = resolveAgentName(ticket, agents);
+                    return (
+                      <tr key={ticket.id} className={`ad__row ${unassigned ? 'ad__row--unassigned' : ''}`}>
+                        <td className="ad__cell-id">#{ticket.id}</td>
+                        <td className="ad__cell-title">{ticket.title}</td>
+                        <td><span className={`ad__badge ad__badge--status ${sm.cls}`}>{sm.label}</span></td>
+                        <td><span className={`ad__badge ad__badge--priority ${pm.cls}`}>{pm.label}</span></td>
+                        <td className="ad__cell-agent">
+                          {unassigned || !agentName ? (
+                            <span className="ad__badge ad__badge--unassigned">Unassigned</span>
+                          ) : (
+                            <span className="ad__agent-cell">
+                              <span className="ad__agent-avatar">
+                                {agentName[0].toUpperCase()}
+                              </span>
+                              <span className="ad__agent-name">{agentName}</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="ad__cell-date">
+                          {new Date(ticket.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="ad__cell-action">
+                          <button
+                            className="ad__btn-icon"
+                            onClick={() => openTicketDetail(ticket)}
+                            title="Manage ticket"
+                          >
+                            <IconEdit />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* ── Pagination ── */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            />
+          </>
         )}
       </section>
-
-      {/* ── Create Modal ── */}
-      {showCreateModal && (
-        <div className="ad__overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="ad__modal" onClick={e => e.stopPropagation()}>
-            <div className="ad__modal-head">
-              <div>
-                <h2>Create New Ticket</h2>
-                <p className="ad__modal-sub">Fill in the details to open a support ticket</p>
-              </div>
-              <button className="ad__modal-close" onClick={() => setShowCreateModal(false)}><IconClose /></button>
-            </div>
-            <form onSubmit={handleCreateTicket} className="ad__form">
-              <div className="ad__field">
-                <label>Title <span className="ad__req">*</span></label>
-                <input type="text" name="title" value={formData.title} onChange={handleInputChange} placeholder="Briefly describe the issue" required />
-              </div>
-              <div className="ad__field">
-                <label>Description <span className="ad__req">*</span></label>
-                <textarea name="description" value={formData.description} onChange={handleInputChange} placeholder="Provide full details about the issue…" rows="5" required />
-              </div>
-              <div className="ad__form-row">
-                <div className="ad__field">
-                  <label>Category</label>
-                  <div className="ad__select-wrap">
-                    <select name="category" value={formData.category} onChange={handleInputChange}>
-                      <option>General</option>
-                      <option>Technical</option>
-                      <option>Billing</option>
-                      <option>Account</option>
-                      <option>Other</option>
-                    </select>
-                    <IconChevron />
-                  </div>
-                </div>
-                <div className="ad__field">
-                  <label>Priority</label>
-                  <div className="ad__select-wrap">
-                    <select name="priority" value={formData.priority} onChange={handleInputChange}>
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                    </select>
-                    <IconChevron />
-                  </div>
-                </div>
-              </div>
-              <div className="ad__form-actions">
-                <button type="button" className="ad__btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
-                <button type="submit" className="ad__btn-primary">Create Ticket</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ── Detail Modal ── */}
       {showDetailModal && selectedTicket && (
@@ -548,30 +517,23 @@ const AdminDashboard = ({ user }) => {
               <div className="ad__detail-grid">
                 <div className="ad__detail-cell">
                   <label>Status</label>
-                  <div className="ad__select-wrap">
-                    <select value={updateForm.status} onChange={e => setUpdateForm({ ...updateForm, status: e.target.value })}>
-                      <option value="OPEN">Open</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="RESOLVED">Resolved</option>
-                    </select>
-                    <IconChevron />
-                  </div>
+                  <span className={`ad__badge ad__badge--status ${getStatusMeta(selectedTicket.status).cls}`}>
+                    {getStatusMeta(selectedTicket.status).label}
+                  </span>
                 </div>
                 <div className="ad__detail-cell">
                   <label>Priority</label>
-                  <div className="ad__select-wrap">
-                    <select value={updateForm.priority} onChange={e => setUpdateForm({ ...updateForm, priority: e.target.value })}>
-                      <option value="LOW">Low</option>
-                      <option value="MEDIUM">Medium</option>
-                      <option value="HIGH">High</option>
-                    </select>
-                    <IconChevron />
-                  </div>
+                  <span className={`ad__badge ad__badge--priority ${getPriorityMeta(selectedTicket.priority).cls}`}>
+                    {getPriorityMeta(selectedTicket.priority).label}
+                  </span>
                 </div>
                 <div className="ad__detail-cell ad__detail-cell--full">
                   <label>Assign To Support Agent</label>
                   <div className="ad__select-wrap">
-                    <select value={updateForm.assignedTo} onChange={e => setUpdateForm({ ...updateForm, assignedTo: e.target.value })}>
+                    <select
+                      value={updateForm.assignedTo}
+                      onChange={e => setUpdateForm({ ...updateForm, assignedTo: e.target.value })}
+                    >
                       <option value="">— Unassigned —</option>
                       {agents.map(agent => (
                         <option key={agent.agentId} value={agent.agentId}>
@@ -584,14 +546,16 @@ const AdminDashboard = ({ user }) => {
                 </div>
               </div>
 
-              <div className="ad__detail-desc">
-                <label>Description</label>
-                <p>{selectedTicket.description}</p>
-              </div>
+              {selectedTicket.description && (
+                <div className="ad__detail-desc">
+                  <label>Description</label>
+                  <p>{selectedTicket.description}</p>
+                </div>
+              )}
 
               <div className="ad__form-actions">
-                <button className="ad__btn-secondary" onClick={() => setShowDetailModal(false)}>Discard</button>
-                <button className="ad__btn-primary" onClick={handleUpdateTicket}>Save Changes</button>
+                <button className="ad__btn-secondary" onClick={() => setShowDetailModal(false)}>Close</button>
+                <button className="ad__btn-primary" onClick={handleUpdateTicket}>Save Assignment</button>
               </div>
             </div>
           </div>

@@ -22,14 +22,20 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
  
-// Response interceptor - handle 401
+// ✅ Response interceptor - FIXED: No automatic redirects
+// Let components handle 401 errors so error messages can display properly
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      removeToken();
-      window.location.href = '/login';
-    }
+    console.error('API Error:', {
+      status: error.response?.status,
+      message: error.response?.data?.message,
+    });
+    
+    // ❌ REMOVED: window.location.href = '/login'
+    // This was causing automatic refresh and preventing error messages
+    
+    // ✅ Just reject the error - let components and AuthProvider handle it
     return Promise.reject(error);
   }
 );
