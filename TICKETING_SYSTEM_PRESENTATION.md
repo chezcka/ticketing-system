@@ -45,33 +45,30 @@
 
 ## Slide 4: System Architecture Diagram
 
-```mermaid
-flowchart LR
-    classDef frontend fill:#0f766e,stroke:#115e59,color:#ffffff,stroke-width:2px;
-    classDef backend fill:#1d4ed8,stroke:#1e40af,color:#ffffff,stroke-width:2px;
-    classDef db fill:#f97316,stroke:#ea580c,color:#111111,stroke-width:2px;
-
-    subgraph Frontend[Frontend: React + Vite]
-      UI[User Interface]
-      Auth[JWT Storage]
-      API[API Request Layer]
-      UI --> API
-      Auth --> API
-    end
-
-    subgraph Backend[Backend: Spring Boot]
-      APIController[REST Controllers]
-      Security[JWT + Role Security]
-      Services[Business Services]
-      Repositories[JPA Repositories]
-      APIController --> Security
-      Security --> Services
-      Services --> Repositories
-    end
-
-    Database[(MySQL)]
-    API -->|HTTP JSON| APIController
-    APIController -->|DB access| Database
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Frontend Client (React implemented / Angular possible)       │
+│ - Login/Register/Profile                                     │
+│ - Dashboard / Ticket List / Analytics                        │
+│ - Admin Dashboard / Users / Tickets                          │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ HTTPS + JWT (Bearer Token)
+┌───────────────────────────▼───────────────────────────────────────────────────────┐
+│ Spring Boot REST API (Gradle)                                                     │
+│ Controllers: AuthController, TicketController, CommentController, AdminController │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Services: AuthService, TicketService, CommentService, AdminService                │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Security: JwtFilter, JwtUtil, SecurityConfig                                      │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Repositories: UserRepository, TicketRepository, CommentRepository                 │
+├───────────────────────────────────────────────────────────────────────────────────┤
+│ Entities: User, Ticket, Comment                                                   │
+└───────────────────────────┬───────────────────────────────────────────────────────┘
+                            │ JPA / Hibernate
+┌───────────────────────────▼──────────────────────────────────┐
+│ MySQL Database                                               │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -102,53 +99,47 @@ flowchart TD
 
 ## Slide 5.1: Entity Relationship Diagram
 
-```mermaid
-erDiagram
-    USERS {
-      BIGINT id PK
-      VARCHAR email
-      VARCHAR password
-      VARCHAR full_name
-      VARCHAR role
-      VARCHAR status
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
-    TICKETS {
-      BIGINT id PK
-      VARCHAR title
-      VARCHAR description
-      VARCHAR status
-      VARCHAR priority
-      BIGINT created_by FK
-      BIGINT assigned_to FK
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
-    COMMENTS {
-      BIGINT id PK
-      BIGINT ticket_id FK
-      BIGINT author_id FK
-      VARCHAR content
-      BOOLEAN is_internal
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
+```text
+**Entity Relationship Snapshot:**
 
-    USERS ||--o{ TICKETS : creates
-    USERS ||--o{ COMMENTS : authors
-    TICKETS ||--o{ COMMENTS : contains
+┌──────────┐          ┌─────────────────┐
+│   User   │          │   Ticket        │
+├──────────┤          ├─────────────────┤
+│ id (PK)  │1----Many │ id (PK)         │
+│ email    │          │ title           │
+│ password │          │ description     │
+│ role     │          │ status          │
+│ status   │          │ priority        │
+│          │          │ created_by (FK) │
+│          │          │ assigned_to (FK)│
+│          │          │ createdAt       │
+│          │          │ updatedAt       │
+└──────────┘          └─────────────────┘
+                            │
+                            │1----Many
+                            ▼
+                     ┌──────────────┐
+                     │   Comment    │
+                     ├──────────────┤
+                     │ id (PK)      │
+                     │ ticket_id(FK)│
+                     │ author_id(FK)│
+                     │ content      │
+                     │ is_internal  │
+                     │ createdAt    │
+                     │ updatedAt    │
+                     └──────────────┘
 ```
 
 ---
 
 ## Slide 6: Role-Based Pages
 
-| Role | Main Page | Key Actions |
-|---|---|---|
-| CLIENT | Dashboard + My Tickets | Create ticket, view own tickets, comment |
-| SUPPORT_AGENT | Agent dashboard + Assigned tickets | Claim/resolve tickets, add comments, update status |
-| ADMIN | Admin dashboard + Analytics | Manage users, view all tickets, stats |
+| Role          | Main Page                             | Key Actions                                           |
+|---------------|---------------------------------------|-------------------------------------------------------|
+| CLIENT        | Dashboard + My Tickets                | Create ticket, view own tickets, comment              |
+| SUPPORT_AGENT | Agent dashboard + Assigned tickets    | claim /resolve tickets, add comments, update status   |
+| ADMIN         | Admin dashboard + Analytics           | Manage users, view all tickets, stats                 |
 
 ---
 
@@ -167,15 +158,27 @@ erDiagram
 
 ## Slide 8: Backend API Map
 
-```mermaid
-flowchart LR
-    A[/api/auth/*] --> B[AuthController]
-    C[/api/tickets/*] --> D[TicketController]
-    E[/api/tickets/*/comments] --> F[CommentController]
+```text
+Backend API Map
 
-    B -->|auth| UserService
-    D -->|ticket logic| TicketService
-    F -->|comments| CommentService
+┌───────────────────────────────────────────────────────────────────────┐
+│ /api/auth/*                -> AuthController                          │
+│   - POST /api/auth/login          -> AuthController.login()           │
+│   - POST /api/auth/register       -> AuthController.register()        │
+│   - GET  /api/auth/me             -> AuthController.me()              │
+│ /api/tickets/*             -> TicketController                        │
+│   - GET  /api/tickets             -> TicketController.listTickets()   │
+│   - POST /api/tickets             -> TicketController.createTicket()  │
+│   - GET  /api/tickets/{id}        -> TicketController.getTicket()     │
+│   - PATCH /api/tickets/{id}/status-> TicketController.updateStatus()  │
+│ /api/tickets/{id}/comments -> CommentController                       │
+│   - GET, POST /comments           -> CommentController (list/create)  │
+└───────────────────────────────────────────────────────────────────────┘
+
+Service mapping:
+- AuthController   -> `UserService` (authentication, user management)
+- TicketController -> `TicketService` (ticket CRUD, assignment, stats)
+- CommentController-> `CommentService` (comment CRUD)
 ```
 
 ---

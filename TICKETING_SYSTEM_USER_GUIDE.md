@@ -73,36 +73,30 @@ This app uses roles to decide what users can do.
 
 ## 5) Visual Architecture
 
-```mermaid
-flowchart LR
-    classDef frontend fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
-    classDef backend fill:#0f766e,stroke:#115e59,color:#ffffff,stroke-width:2px;
-    classDef security fill:#9333ea,stroke:#7e22ce,color:#ffffff,stroke-width:2px;
-    classDef database fill:#f97316,stroke:#ea580c,color:#111111,stroke-width:2px;
-
-    subgraph Frontend[Frontend: React + Vite]
-      UI[User Interface]
-      Auth[Auth State / JWT Storage]
-      UI -->|API calls| API[HTTP Requests]
-      UI --> Auth
-    end
-
-    subgraph Backend[Backend: Spring Boot]
-      APIController[REST API / Controllers]
-      SecurityLayer[Security + JWT Validation]
-      Services[Business Logic Services]
-      Repos[Repositories / JPA]
-      APIController --> SecurityLayer
-      SecurityLayer --> Services
-      Services --> Repos
-    end
-
-    DB[(MySQL)]
-    APIController -->|reads/writes| DB
-    Auth -->|sends token| APIController
-
-    class UI,Auth,APIController,SecurityLayer,Services,Repos frontend;
-    class DB database;
+```text
+┌──────────────────────────────────────────────────────────────┐
+│ Frontend Client (React implemented / Angular possible)       │
+│ - Login/Register/Profile                                     │
+│ - Dashboard / Ticket List / Analytics                        │
+│ - Admin Dashboard / Users / Tickets                          │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ HTTPS + JWT (Bearer Token)
+┌───────────────────────────▼──────────────────────────────────┐
+│ Spring Boot REST API (Gradle)                                │
+│ Controllers: AuthController, TicketController, CommentController, AdminController │
+├──────────────────────────────────────────────────────────┤
+│ Services: AuthService, TicketService, CommentService, AdminService             │
+├──────────────────────────────────────────────────────────┤
+│ Security: JwtFilter, JwtUtil, SecurityConfig                  │
+├──────────────────────────────────────────────────────────┤
+│ Repositories: UserRepository, TicketRepository, CommentRepository            │
+├──────────────────────────────────────────────────────────┤
+│ Entities: User, Ticket, Comment                                │
+└───────────────────────────┬──────────────────────────────────┘
+                            │ JPA / Hibernate
+┌───────────────────────────▼──────────────────────────────────┐
+│ MySQL Database                                               │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ### What happens when the user logs in
@@ -132,42 +126,36 @@ flowchart LR
 
 ## 5.1) Entity Relationship Diagram
 
-```mermaid
-erDiagram
-    USERS {
-      BIGINT id PK "Primary Key"
-      VARCHAR email
-      VARCHAR password
-      VARCHAR full_name
-      VARCHAR role
-      VARCHAR status
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
-    TICKETS {
-      BIGINT id PK "Primary Key"
-      VARCHAR title
-      VARCHAR description
-      VARCHAR status
-      VARCHAR priority
-      BIGINT created_by FK "Foreign Key to USERS.id"
-      BIGINT assigned_to FK "Foreign Key to USERS.id"
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
-    COMMENTS {
-      BIGINT id PK "Primary Key"
-      BIGINT ticket_id FK "Foreign Key to TICKETS.id"
-      BIGINT author_id FK "Foreign Key to USERS.id"
-      VARCHAR content
-      BOOLEAN is_internal
-      TIMESTAMP created_at
-      TIMESTAMP updated_at
-    }
+```text
+**Entity Relationship Snapshot:**
 
-    USERS ||--o{ TICKETS : creates
-    USERS ||--o{ COMMENTS : authors
-    TICKETS ||--o{ COMMENTS : contains
+┌──────────┐          ┌────────────┐
+│   User   │          │   Ticket   │
+├──────────┤          ├────────────┤
+│ id (PK)  │1----Many │ id (PK)    │
+│ email    │          │ title      │
+│ password │          │ description│
+│ role     │          │ status     │
+│ status   │          │ priority   │
+│          │          │ created_by (FK)
+│          │          │ assigned_to (FK)
+│          │          │ createdAt  │
+│          │          │ updatedAt  │
+└──────────┘          └────────────┘
+                            │
+                            │1----Many
+                            ▼
+                     ┌──────────────┐
+                     │   Comment    │
+                     ├──────────────┤
+                     │ id (PK)      │
+                     │ ticket_id(FK)│
+                     │ author_id(FK)│
+                     │ content      │
+                     │ is_internal  │
+                     │ createdAt    │
+                     │ updatedAt    │
+                     └──────────────┘
 ```
 
 ---
